@@ -37,16 +37,54 @@
 
 ---
 
+## 📥 Загрузка (Скачать APK)
+
+Свежие скомпилированные и подписанные APK доступны на странице релизов:
+👉 **[Скачать MultiBypass из GitHub Releases](https://github.com/ntvampire/MultiBypass/releases/latest)**
+
+- **`app-arm64-v8a-release.apk`** — для большинства современных Android-устройств (64-bit).
+- **`app-universal-release.apk`** — универсальная версия для любых процессоров.
+- **`app-armeabi-v7a-release.apk`** — для 32-битных устройств.
+
+---
+
 ## 🚀 Сборка проекта
 
 Проект полностью настроен для непрерывной сборки (CI/CD) через **GitHub Actions**:
 - На каждый пуш в ветку `main` автоматически собираются релизные APK (`universal`, `arm64-v8a`, `armeabi-v7a`).
 - Готовые APK доступны для скачивания во вкладке **Actions -> Artifacts**.
-- При создании тега версии (`v*`) автоматически формируется **GitHub Release** с прикрепленными APK.
+- При создании тега версии (`v*`) автоматически формируется **GitHub Release** с прикрепленными подписанными APK.
+
+---
+
+## 💖 Благодарности и используемые сторонние проекты (Credits)
+
+В проекте **MultiBypass** используются наработки и компоненты следующих открытых проектов:
+
+- **[ByeByeDPI (ciadpi)](https://github.com/hufrea/byedpi)** (автор: [@hufrea](https://github.com/hufrea))  
+  Локальный SOCKS-прокси на Си для обхода блокировок DPI (Deep Packet Inspection) с помощью фрагментации TCP-пакетов, манипуляции с TLS ClientHello (fake SNI, split, disorder) и OOB-пакетов. Исходный код C-модуля скомпилирован через CMake в `libbyedpi.so`.
+
+- **[hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)** (автор: [@heiher](https://github.com/heiher))  
+  Высокопроизводительный туннель TUN-to-SOCKS5, служащий мостом между Android TUN (`VpnService`) и локальным SOCKS5-прокси ByeDPI.
+
+- **[ByeDPIAndroid](https://github.com/romanvht/ByeDPIAndroid)** (автор: [@romanvht](https://github.com/romanvht))  
+  Эталонная архитектура интеграции ByeDPI и hev-socks5-tunnel в среду Android с JNI-обвязкой, послужившая основой для нативной интеграции.
+
+- **[tgws / Telegram WS Proxy](https://github.com/coyove/tgws)** (и реализация MTProto WebSocket на Rust)  
+  WebSocket/TLS-транспорт для трафика Telegram MTProto, маскирующий прокси-подключение под обычный защищённый веб-трафик и обеспечивающий устойчивость к фильтрации.
+
+- **[OkHttp & okhttp-dnsoverhttps](https://github.com/square/okhttp)** (Square)  
+  Высокопроизводительный HTTP-клиент и модуль для выполнения зашифрованных DNS-запросов (DNS-over-HTTPS / DoH) к сервисам Comss.one, AdGuard, NextDNS, Google, Quad9 и Cloudflare.
+
+- **[Jetpack Compose & Material 3](https://developer.android.com/jetpack/compose)** (Google)  
+  Декларативный UI-фреймворк для создания современного и отзывчивого интерфейса приложения с поддержкой динамических цветов и тем.
+
+- **Базы стратегий обхода сообщества**:  
+  Списки проверенных параметров ByeDPI/Zapret, оптимизированные для восстановления стабильной работы YouTube, Discord и других сервисов при различных типах блокировок ТСПУ.
 
 ---
 
 ## 📄 Лицензия
 
-Распространяется под лицензией GPLv3 / MIT в соответствии с используемыми компонентами (ByeByeDPI, TG-WS-Proxy).
+Распространяется под лицензиями GPLv3 и MIT в соответствии с лицензиями используемых компонентов (ByeByeDPI, hev-socks5-tunnel, tgws).
 
