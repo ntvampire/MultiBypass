@@ -230,7 +230,7 @@ class MultiBypassVpnService : VpnService() {
         return NotificationCompat.Builder(this, MultiBypassApplication.VPN_NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.vpn_connected))
             .setContentText("DNS маршрутизация и Анти-DPI активны")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .addAction(0, getString(R.string.vpn_action_stop), stopIntent)
             .setOngoing(true)

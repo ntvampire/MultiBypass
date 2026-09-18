@@ -92,7 +92,7 @@ class TelegramProxyService : Service() {
         return NotificationCompat.Builder(this, MultiBypassApplication.TG_NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Telegram WS Proxy")
             .setContentText("Локальный MTProto прокси активен (порт 1443)")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
