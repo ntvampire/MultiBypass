@@ -29,9 +29,22 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.p12")
+            storePassword = "multibypass"
+            keyAlias = "multibypass"
+            keyPassword = "multibypass"
+            storeType = "PKCS12"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -39,6 +52,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
