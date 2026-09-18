@@ -42,9 +42,9 @@
 Свежие скомпилированные и подписанные APK доступны на странице релизов:
 👉 **[Скачать MultiBypass из GitHub Releases](https://github.com/ntvampire/MultiBypass/releases/latest)**
 
-- **`app-arm64-v8a-release.apk`** — для большинства современных Android-устройств (64-bit).
-- **`app-universal-release.apk`** — универсальная версия для любых процессоров.
-- **`app-armeabi-v7a-release.apk`** — для 32-битных устройств.
+- **`MultiBypass-arm64-v8a.apk`** — для большинства современных Android-устройств (64-bit).
+- **`MultiBypass-universal.apk`** — универсальная версия для любых процессоров.
+- **`MultiBypass-armeabi-v7a.apk`** — для 32-битных устройств.
 
 ---
 
