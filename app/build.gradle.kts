@@ -73,6 +73,7 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            pickFirsts += setOf("**/libbyedpi.so", "**/libhev-socks5-tunnel.so", "**/libtgwsproxy.so")
         }
     }
 }
