@@ -37,7 +37,11 @@ jobs:
       - name: Find and organize APKs
         run: |
           mkdir -p release-apks
-          find app/build/outputs/apk/release/ -type f -name "*.apk" -exec cp {} release-apks/ \;
+          for f in $(find app/build/outputs/apk/release/ -type f -name "*.apk"); do
+            filename=$(basename "$f")
+            newname=$(echo "$filename" | sed -E 's/^app-/MultiBypass-/' | sed -E 's/-release\.apk$/.apk/')
+            cp "$f" "release-apks/$newname"
+          done
           ls -lah release-apks/
 
       - name: Upload APK artifacts

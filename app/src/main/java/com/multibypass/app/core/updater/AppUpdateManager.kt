@@ -54,15 +54,39 @@ object AppUpdateManager {
 
                 var apkDownloadUrl = ""
                 if (assets != null) {
+                    val supportedAbis = android.os.Build.SUPPORTED_ABIS.toList()
+                    val isArm64 = supportedAbis.any { it.contains("arm64", ignoreCase = true) }
+                    val isArmV7 = supportedAbis.any { it.contains("armeabi", ignoreCase = true) }
+
+                    var arm64Url = ""
+                    var armv7Url = ""
+                    var universalUrl = ""
+                    var fallbackUrl = ""
+
                     for (i in 0 until assets.length()) {
                         val asset = assets.optJSONObject(i) ?: continue
                         val name = asset.optString("name", "")
+                        val downloadUrl = asset.optString("browser_download_url", "")
                         if (name.endsWith(".apk", ignoreCase = true)) {
-                            // Prefer arm64 or universal
-                            if (name.contains("arm64") || name.contains("universal") || apkDownloadUrl.isEmpty()) {
-                                apkDownloadUrl = asset.optString("browser_download_url", "")
+                            if (name.contains("arm64", ignoreCase = true)) {
+                                arm64Url = downloadUrl
+                            } else if (name.contains("v7a", ignoreCase = true) || name.contains("armeabi", ignoreCase = true)) {
+                                armv7Url = downloadUrl
+                            } else if (name.contains("universal", ignoreCase = true)) {
+                                universalUrl = downloadUrl
+                            }
+                            if (fallbackUrl.isEmpty()) {
+                                fallbackUrl = downloadUrl
                             }
                         }
+                    }
+
+                    apkDownloadUrl = when {
+                        isArm64 && arm64Url.isNotEmpty() -> arm64Url
+                        isArmV7 && armv7Url.isNotEmpty() -> armv7Url
+                        universalUrl.isNotEmpty() -> universalUrl
+                        arm64Url.isNotEmpty() -> arm64Url
+                        else -> fallbackUrl
                     }
                 }
 

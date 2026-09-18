@@ -37,14 +37,53 @@ jobs:
       - name: Organize APKs for release
         run: |
           mkdir -p release-apks
-          find app/build/outputs/apk/release/ -type f -name "*.apk" -exec cp {} release-apks/ \;
+          for f in $(find app/build/outputs/apk/release/ -type f -name "*.apk"); do
+            filename=$(basename "$f")
+            newname=$(echo "$filename" | sed -E 's/^app-/MultiBypass-/' | sed -E 's/-release\.apk$/.apk/')
+            cp "$f" "release-apks/$newname"
+          done
           ls -lah release-apks/
+
+      - name: Generate Release Notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          TAG_NOTE=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)
+
+          echo "## 📱 MultiBypass $TAG" > release_notes.md
+          echo "" >> release_notes.md
+
+          if [ -n "$TAG_NOTE" ]; then
+            echo "### 📝 Список изменений:" >> release_notes.md
+            echo "$TAG_NOTE" >> release_notes.md
+            echo "" >> release_notes.md
+          elif [ -f "RELEASE_NOTES.md" ]; then
+            cat RELEASE_NOTES.md >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          cat << 'EOF' >> release_notes.md
+          ---
+
+          ### 📦 Установочные пакеты (APK) для загрузки:
+          | Файл | Архитектура процессора | Назначение |
+          |---|---|---|
+          | **`MultiBypass-arm64-v8a.apk`** | ARM 64-bit | **Рекомендуется** для большинства современных Android 9+ смартфонов |
+          | **`MultiBypass-universal.apk`** | Универсальный | Содержит библиотеки для всех архитектур |
+          | **`MultiBypass-armeabi-v7a.apk`** | ARM 32-bit | Для старых моделей устройств и ТВ-приставок |
+
+          ### 🛡️ Основные возможности:
+          - **Раздельное туннелирование (Split-tunneling)**: Полный прямой обход для невыбранных приложений на уровне ядра Android (сохраняются банковские приложения, Госуслуги и белые списки операторов).
+          - **Группа 1 (Свой DNS)**: Стандартный IP DNS и DNS-over-HTTPS (DoH) с готовыми пресетами (Comss, AdGuard, Google, Quad9, Yandex, NextDNS, Xbox DNS) и ручным вводом.
+          - **Группа 2 (Анти-DPI)**: Встроенный C-движок ByeDPI (`ciadpi`) с интерактивным живым автоподбором стратегий и замером пинга для YouTube и Discord.
+          - **Telegram WebSocket Proxy**: Встроенный MTProto WS прокси на Rust (`127.0.0.1:1443`) с подключением в 1 клик.
+          - **Встроенное автообновление**: Проверка и установка свежих версий прямо внутри приложения.
+          EOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: MultiBypass ${{ github.ref_name }}
+          body_path: release_notes.md
           files: release-apks/*.apk
-          generate_release_notes: true
           draft: false
           prerelease: false
