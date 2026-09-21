@@ -13,9 +13,12 @@ import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
+import com.multibypass.app.core.dns.LocalDohServer
 import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
+import io.github.romanvht.byedpi.core.ByeDpiProxy
 import io.github.romanvht.byedpi.core.TProxyService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +58,7 @@ class MultiBypassVpnService : VpnService() {
     }
 
     private var tunFd: ParcelFileDescriptor? = null
+    private var dohServer: LocalDohServer? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -101,10 +105,24 @@ class MultiBypassVpnService : VpnService() {
                     TelegramProxyService.start(applicationContext)
                 }
 
-                // 3. Configure and establish VPN TUN interface
-                val dnsServer = dnsConfig.getEffectiveDns().let {
-                    // Extract IP if it's a URL or standard IP
-                    if (it.startsWith("http")) "92.223.109.31" else it
+                // 3. Configure DNS & Local DoH Server
+                val effectiveDns = dnsConfig.getEffectiveDns()
+                val dnsServer = if (dnsConfig.mode == DnsMode.DOH) {
+                    try {
+                        dohServer?.stop()
+                        dohServer = LocalDohServer(port = 5353, dohUrl = effectiveDns).apply { start() }
+                        ByeDpiProxy.setDnsRedirectPort(5353)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
+                    }
+                    "10.10.10.1"
+                } else {
+                    try {
+                        dohServer?.stop()
+                        dohServer = null
+                        ByeDpiProxy.setDnsRedirectPort(0)
+                    } catch (_: Exception) {}
+                    effectiveDns
                 }
 
                 val allAllowedApps = (dnsConfig.appPackages + antiDpiConfig.appPackages).distinct()
@@ -194,6 +212,14 @@ class MultiBypassVpnService : VpnService() {
                 ByeDpiController.stop()
             } catch (e: Exception) {
                 Log.e(TAG, "Error stopping ByeDPI", e)
+            }
+
+            try {
+                dohServer?.stop()
+                dohServer = null
+                ByeDpiProxy.setDnsRedirectPort(0)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping Local DoH Server", e)
             }
 
             val repository = SettingsRepository.getInstance(applicationContext)

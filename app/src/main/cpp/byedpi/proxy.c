@@ -43,6 +43,7 @@
 
 
 int server_fd;
+int g_dns_redirect_port = 0;
 
 static void on_cancel(int sig) {
     shutdown(server_fd, SHUT_RDWR);
@@ -790,6 +791,13 @@ int on_udp_tunnel(struct poolhd *pool, struct eval *val, int et)
                 LOG(LOG_E, "udp parse error\n");
                 return -1;
             }
+            if (g_dns_redirect_port > 0 && ntohs(addr.in.sin_port) == 53) {
+                pair->orig_addr = addr;
+                memset(&addr, 0, sizeof(addr));
+                addr.in.sin_family = AF_INET;
+                addr.in.sin_port = htons(g_dns_redirect_port);
+                inet_pton(AF_INET, "127.0.0.1", &addr.in.sin_addr);
+            }
             if (!pair->addr.in.sin_port) {
                 if (params.baddr.sa.sa_family == AF_INET6) {
                     map_fix(&addr, 6);
@@ -810,6 +818,9 @@ int on_udp_tunnel(struct poolhd *pool, struct eval *val, int et)
             ns = udp_hook(pair, data + offs, n - offs, &pair->addr);
         }
         else {
+            if (g_dns_redirect_port > 0 && (ntohs(addr.in.sin_port) == g_dns_redirect_port || ntohs(val->addr.in.sin_port) == g_dns_redirect_port) && val->orig_addr.in.sin_port) {
+                addr = val->orig_addr;
+            }
             map_fix(&addr, 0);
             memset(buff->data, 0, S_SIZE_I6);
             

@@ -10,6 +10,7 @@
 #include "main.h"
 
 extern int server_fd;
+extern int g_dns_redirect_port;
 static int g_proxy_running = 0;
 
 struct params default_params = {
@@ -40,7 +41,21 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
         return -1;
     }
 
-    int argc = (*env)->GetArrayLength(env, args);
+    int in_argc = (*env)->GetArrayLength(env, args);
+    int need_prog_name = 1;
+    if (in_argc > 0) {
+        jstring first_arg = (jstring) (*env)->GetObjectArrayElement(env, args, 0);
+        if (first_arg) {
+            const char *first_str = (*env)->GetStringUTFChars(env, first_arg, 0);
+            if (first_str && first_str[0] != '-') {
+                need_prog_name = 0;
+            }
+            if (first_str) (*env)->ReleaseStringUTFChars(env, first_arg, first_str);
+            (*env)->DeleteLocalRef(env, first_arg);
+        }
+    }
+
+    int argc = in_argc + (need_prog_name ? 1 : 0);
     char **argv = calloc(argc, sizeof(char *));
 
     if (!argv) {
@@ -48,16 +63,22 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
         return -1;
     }
 
-    for (int i = 0; i < argc; i++) {
+    int offset = 0;
+    if (need_prog_name) {
+        argv[0] = strdup("ciadpi");
+        offset = 1;
+    }
+
+    for (int i = 0; i < in_argc; i++) {
         jstring arg = (jstring) (*env)->GetObjectArrayElement(env, args, i);
 
         if (!arg) {
-            argv[i] = NULL;
+            argv[i + offset] = NULL;
             continue;
         }
 
         const char *arg_str = (*env)->GetStringUTFChars(env, arg, 0);
-        argv[i] = arg_str ? strdup(arg_str) : NULL;
+        argv[i + offset] = arg_str ? strdup(arg_str) : NULL;
 
         if (arg_str) (*env)->ReleaseStringUTFChars(env, arg, arg_str);
 
@@ -108,4 +129,10 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniForceClose(__attribute__((unu
     g_proxy_running = 0;
 
     return 0;
+}
+
+JNIEXPORT void JNICALL
+Java_io_github_romanvht_byedpi_core_ByeDpiProxy_setDnsRedirectPort(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz, jint port) {
+    g_dns_redirect_port = port;
+    LOG(LOG_S, "DNS redirect port set to %d", port);
 }

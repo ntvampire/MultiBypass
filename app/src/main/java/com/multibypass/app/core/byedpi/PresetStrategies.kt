@@ -2,7 +2,10 @@ package com.multibypass.app.core.byedpi
 
 import android.content.Context
 import android.util.Log
+import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.StrategyTestResult
+import com.multibypass.app.data.model.VpnStatus
+import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +67,7 @@ object PresetStrategies {
 class StrategyTester(private val context: Context) {
     companion object {
         private const val TAG = "StrategyTester"
-        private const val TEST_PORT = 1081
+        private const val TEST_PORT = 1080
     }
 
     private val _isTesting = MutableStateFlow(false)
@@ -83,48 +86,69 @@ class StrategyTester(private val context: Context) {
             _isTesting.value = true
             _testResults.value = emptyList()
 
-            val strategies = PresetStrategies.loadStrategies(context)
-            val sites = PresetStrategies.loadTestSites(context)
-            val results = mutableListOf<StrategyTestResult>()
+            val repository = SettingsRepository.getInstance(context)
+            val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
+            val originalStrategy = repository.antiDpiConfig.value.strategy
 
-            var bestResult: StrategyTestResult? = null
+            try {
+                val strategies = PresetStrategies.loadStrategies(context)
+                val sites = PresetStrategies.loadTestSites(context)
+                val results = mutableListOf<StrategyTestResult>()
 
-            for (strategy in strategies) {
-                if (!isActive) break
+                var bestResult: StrategyTestResult? = null
 
-                val result = testSingleStrategy(strategy, sites)
-                results.add(result)
-                _testResults.value = results.sortedByDescending { it.successfulSitesCount }
-                    .sortedBy { if (it.isWorking) it.latencyMs else Long.MAX_VALUE }
+                for (strategy in strategies) {
+                    if (!isActive) break
 
-                if (result.isWorking && (bestResult == null || result.latencyMs < bestResult.latencyMs)) {
-                    bestResult = result
+                    val result = testSingleStrategy(strategy, sites)
+                    results.add(result)
+                    _testResults.value = results.sortedByDescending { it.successfulSitesCount }
+                        .sortedBy { if (it.isWorking) it.latencyMs else Long.MAX_VALUE }
+
+                    if (result.isWorking && (bestResult == null || result.latencyMs < bestResult.latencyMs)) {
+                        bestResult = result
+                    }
                 }
-            }
 
-            _isTesting.value = false
-            onComplete(bestResult)
+                if (wasVpnConnected) {
+                    val activeStrat = bestResult?.strategy ?: originalStrategy
+                    ByeDpiController.start(activeStrat, TEST_PORT)
+                } else {
+                    ByeDpiController.stop()
+                }
+
+                _isTesting.value = false
+                onComplete(bestResult)
+            } catch (e: Exception) {
+                Log.e(TAG, "Testing error: ${e.message}", e)
+                if (wasVpnConnected) {
+                    ByeDpiController.start(originalStrategy, TEST_PORT)
+                } else {
+                    ByeDpiController.stop()
+                }
+                _isTesting.value = false
+                onComplete(null)
+            }
         }
     }
 
     fun stopTest() {
         testJob?.cancel()
         testJob = null
+        val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
+        val repository = SettingsRepository.getInstance(context)
+        val originalStrategy = repository.antiDpiConfig.value.strategy
+        if (wasVpnConnected) {
+            ByeDpiController.start(originalStrategy, TEST_PORT)
+        } else {
+            ByeDpiController.stop()
+        }
         _isTesting.value = false
     }
 
     private suspend fun testSingleStrategy(strategy: String, sites: List<String>): StrategyTestResult {
-        // Start ByeDPI on TEST_PORT
-        val proxyArgs = parseArgs("-i 127.0.0.1 -p $TEST_PORT $strategy")
-        val proxyJob = CoroutineScope(Dispatchers.IO).launch {
-            try {
-                ByeDpiProxy.jniStartProxy(proxyArgs)
-            } catch (e: Exception) {
-                Log.w(TAG, "Proxy start error: ${e.message}")
-            }
-        }
-
-        delay(300)
+        ByeDpiController.start(strategy, TEST_PORT)
+        delay(400)
 
         val client = OkHttpClient.Builder()
             .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", TEST_PORT)))
@@ -149,12 +173,6 @@ class StrategyTester(private val context: Context) {
             } catch (_: Exception) {}
         }
 
-        // Stop test proxy
-        try {
-            ByeDpiProxy.jniStopProxy()
-            proxyJob.cancel()
-        } catch (_: Exception) {}
-
         val isWorking = successCount > 0
         val avgLatency = if (successCount > 0) totalLatency / successCount else 9999L
 
@@ -173,6 +191,9 @@ class StrategyTester(private val context: Context) {
         regex.findAll(cmd).forEach { match ->
             val value = match.groups[1]?.value ?: match.groups[2]?.value ?: match.groups[3]?.value
             if (!value.isNullOrBlank()) list.add(value)
+        }
+        if (list.isNotEmpty() && list[0] != "ciadpi") {
+            list.add(0, "ciadpi")
         }
         return list.toTypedArray()
     }

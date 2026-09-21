@@ -1,5 +1,6 @@
 package com.multibypass.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,8 @@ fun AntiDpiGroupScreen(
     val context = LocalContext.current
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
+
+    BackHandler(onBack = onNavigateBack)
 
     var showAppPicker by remember { mutableStateOf(false) }
     var newDomainInput by remember { mutableStateOf("") }
@@ -108,24 +111,20 @@ fun AntiDpiGroupScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Application Selection
-            Row(
+            Button(
+                onClick = { showAppPicker = true },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
+                Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(20.dp), tint = AccentOrange)
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Выбранные приложения (${antiDpiConfig.appPackages.size}):",
+                    text = "Выбрать приложения (${antiDpiConfig.appPackages.size})",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Button(
-                    onClick = { showAppPicker = true },
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Выбрать")
-                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

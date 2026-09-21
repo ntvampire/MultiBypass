@@ -21,7 +21,7 @@ object ByeDpiController {
             stop()
         }
 
-        val fullCmd = "-i 127.0.0.1 -p $port $strategy"
+        val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy"
         val args = parseArgs(fullCmd)
 
         proxyJob = CoroutineScope(Dispatchers.IO).launch {
@@ -54,6 +54,9 @@ object ByeDpiController {
         regex.findAll(cmd).forEach { match ->
             val value = match.groups[1]?.value ?: match.groups[2]?.value ?: match.groups[3]?.value
             if (!value.isNullOrBlank()) list.add(value)
+        }
+        if (list.isNotEmpty() && list[0] != "ciadpi") {
+            list.add(0, "ciadpi")
         }
         return list.toTypedArray()
     }

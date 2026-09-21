@@ -94,7 +94,7 @@ data class AntiDpiGroupConfig(
 data class TelegramProxyConfig(
     val enabled: Boolean = true,
     val port: Int = 1443,
-    val secret: String = "ee112233445566778899aabbccddeeff7777772e676f6f676c652e636f6d",
+    val secret: String = "112233445566778899aabbccddeeff00",
     val autoStartWithVpn: Boolean = true
 )
 

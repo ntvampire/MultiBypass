@@ -78,6 +78,7 @@ struct eval {
     struct buffer *buff, *sq_buff;
     int flag;
     union sockaddr_u addr;
+    union sockaddr_u orig_addr;
     char *host;
     int host_len;
     

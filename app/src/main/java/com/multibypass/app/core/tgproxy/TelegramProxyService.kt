@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
+import com.multibypass.app.data.repository.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,11 +49,12 @@ class TelegramProxyService : Service() {
 
         serviceScope.launch {
             try {
-                val secret = "ee112233445566778899aabbccddeeff7777772e676f6f676c652e636f6d"
+                val repository = SettingsRepository.getInstance(applicationContext)
+                val secret = repository.tgConfig.value.secret
                 val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
                 if (res == 0) {
                     _isRunning.value = true
-                    Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:1443")
+                    Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:1443 with secret $secret")
                 } else {
                     Log.e(TAG, "Failed to start Telegram WS Proxy: code $res")
                     stopSelf()
@@ -68,12 +70,11 @@ class TelegramProxyService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceScope.launch {
-            try {
-                NativeTgProxy.stopProxy()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping Telegram WS Proxy", e)
-            }
+        try {
+            NativeTgProxy.stopProxy()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping Telegram WS Proxy", e)
+        } finally {
             _isRunning.value = false
         }
         serviceScope.cancel()
@@ -101,7 +102,14 @@ class TelegramProxyService : Service() {
 
 object TelegramProxyController {
     fun openTelegramProxy(context: Context, port: Int = 1443) {
-        val secret = NativeTgProxy.getSecretWithPrefix() ?: "dd112233445566778899aabbccddeeff"
+        val repository = SettingsRepository.getInstance(context)
+        val rawSecret = repository.tgConfig.value.secret
+        val nativeSecret = NativeTgProxy.getSecretWithPrefix()
+        val secret = if (!nativeSecret.isNullOrBlank() && !nativeSecret.contains("00000000000000000000000000000000")) {
+            nativeSecret
+        } else {
+            "dd$rawSecret"
+        }
         val proxyUri = Uri.parse("tg://proxy?server=127.0.0.1&port=$port&secret=$secret")
         val intent = Intent(Intent.ACTION_VIEW, proxyUri).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK

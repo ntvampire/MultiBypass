@@ -83,11 +83,33 @@ class SettingsRepository(context: Context) {
     }
 
     private fun loadTgConfig(): TelegramProxyConfig {
-        val json = prefs.getString(KEY_TG_CONFIG, null) ?: return TelegramProxyConfig()
-        return try {
-            gson.fromJson(json, TelegramProxyConfig::class.java) ?: TelegramProxyConfig()
-        } catch (_: Exception) {
-            TelegramProxyConfig()
+        val json = prefs.getString(KEY_TG_CONFIG, null)
+        val config = if (json != null) {
+            try {
+                gson.fromJson(json, TelegramProxyConfig::class.java) ?: TelegramProxyConfig(secret = generateRandomHexSecret())
+            } catch (_: Exception) {
+                TelegramProxyConfig(secret = generateRandomHexSecret())
+            }
+        } else {
+            TelegramProxyConfig(secret = generateRandomHexSecret())
         }
+
+        val isSecretValid = config.secret.length == 32 &&
+                config.secret.all { it in "0123456789abcdefABCDEF" } &&
+                config.secret != "00000000000000000000000000000000"
+
+        return if (!isSecretValid) {
+            val updated = config.copy(secret = generateRandomHexSecret())
+            prefs.edit().putString(KEY_TG_CONFIG, gson.toJson(updated)).apply()
+            updated
+        } else {
+            config
+        }
+    }
+
+    private fun generateRandomHexSecret(): String {
+        val bytes = ByteArray(16)
+        java.security.SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

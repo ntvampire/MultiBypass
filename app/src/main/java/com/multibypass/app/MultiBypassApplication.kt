@@ -14,7 +14,20 @@ class MultiBypassApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        setupCrashLogger()
         createNotificationChannels()
+    }
+
+    private fun setupCrashLogger() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("MultiBypassCrash", "CRASH in thread ${thread.name}: ${throwable.message}", throwable)
+            try {
+                val file = java.io.File(filesDir, "last_crash.txt")
+                file.writeText("Time: ${java.util.Date()}\nThread: ${thread.name}\n${android.util.Log.getStackTraceString(throwable)}")
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     private fun createNotificationChannels() {

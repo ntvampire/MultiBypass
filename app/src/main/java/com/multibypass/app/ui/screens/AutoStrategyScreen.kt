@@ -1,5 +1,6 @@
 package com.multibypass.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,8 @@ import com.multibypass.app.ui.theme.*
 fun AutoStrategyScreen(
     onNavigateBack: () -> Unit
 ) {
+    BackHandler(onBack = onNavigateBack)
+
     val context = LocalContext.current
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
