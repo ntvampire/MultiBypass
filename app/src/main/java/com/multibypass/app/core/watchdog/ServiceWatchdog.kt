@@ -13,7 +13,7 @@ import android.util.Log
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
-import com.multibypass.app.core.vpn.VpnStatus
+import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
