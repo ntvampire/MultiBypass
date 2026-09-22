@@ -18,6 +18,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ANTIDPI_CONFIG = "key_antidpi_config"
         private const val KEY_TG_CONFIG = "key_tg_config"
         private const val KEY_BOOT_AUTOSTART = "key_boot_autostart"
+        private const val KEY_WATCHDOG_ENABLED = "key_watchdog_enabled"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -44,6 +45,9 @@ class SettingsRepository(context: Context) {
     private val _bootAutoStart = MutableStateFlow(prefs.getBoolean(KEY_BOOT_AUTOSTART, false))
     val bootAutoStart: StateFlow<Boolean> = _bootAutoStart.asStateFlow()
 
+    private val _watchdogEnabled = MutableStateFlow(prefs.getBoolean(KEY_WATCHDOG_ENABLED, true))
+    val watchdogEnabled: StateFlow<Boolean> = _watchdogEnabled.asStateFlow()
+
     fun updateDnsConfig(config: DnsGroupConfig) {
         _dnsConfig.value = config
         prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(config)).apply()
@@ -62,6 +66,11 @@ class SettingsRepository(context: Context) {
     fun setBootAutoStart(enabled: Boolean) {
         _bootAutoStart.value = enabled
         prefs.edit().putBoolean(KEY_BOOT_AUTOSTART, enabled).apply()
+    }
+
+    fun setWatchdogEnabled(enabled: Boolean) {
+        _watchdogEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, enabled).apply()
     }
 
     private fun loadDnsConfig(): DnsGroupConfig {

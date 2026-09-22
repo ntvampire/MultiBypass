@@ -1,7 +1,11 @@
 package com.multibypass.app.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,8 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.multibypass.app.BuildConfig
 import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.core.updater.UpdateInfo
@@ -28,11 +35,39 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { SettingsRepository.getInstance(context) }
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
+    val watchdogEnabled by repository.watchdogEnabled.collectAsState()
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
+
+    val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
+    var isIgnoringBatteryOptimizations by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+            } else {
+                true
+            }
+        )
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    isIgnoringBatteryOptimizations =
+                        powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -84,6 +119,96 @@ fun SettingsScreen(
                         checked = bootAutoStart,
                         onCheckedChange = { repository.setBootAutoStart(it) }
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Stability & Background operation
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Стабильность и работа в фоне",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Контроль служб (Watchdog)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                "Фоновый контроль активности сокетов и мягкий перезапуск служб при смене сетей без расхода батареи",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Switch(
+                            checked = watchdogEnabled,
+                            onCheckedChange = { repository.setWatchdogEnabled(it) }
+                        )
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider(color = DarkBackground, thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                "Работа в фоне без ограничений",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                if (isIgnoringBatteryOptimizations)
+                                    "Оптимизация батареи отключена (рекомендуется)"
+                                else
+                                    "Исключите приложение из оптимизации батареи для предотвращения усыпления фоновых служб",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isIgnoringBatteryOptimizations) GreenPrimary else TextSecondary
+                            )
+
+                            if (!isIgnoringBatteryOptimizations) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                data = Uri.parse("package:${context.packageName}")
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {
+                                            try {
+                                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Отключить ограничения батареи")
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -161,7 +286,7 @@ fun SettingsScreen(
                     Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "MultiBypass — гибкий инструмент обхода блокировок для Android. Объединяет раздельный DoH/DNS резолвинг, ByeByeDPI и встроенный Telegram WS Proxy.",
+                        text = "MultiBypass — сетевая утилита раздельной маршрутизации, тестирования устойчивости соединений и анализа транспортных протоколов для Android. Объединяет защищённый DNS-резолвинг (RFC 8484 DoH), модуль десинхронизации TCP-сегментов и локальный транспортный шлюз MTProto WebSocket.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

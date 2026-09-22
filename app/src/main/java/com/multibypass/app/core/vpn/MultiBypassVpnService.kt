@@ -15,6 +15,7 @@ import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.dns.LocalDohServer
 import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -184,6 +185,7 @@ class MultiBypassVpnService : VpnService() {
 
                 _vpnStatus.value = VpnStatus.CONNECTED
                 Log.i(TAG, "MultiBypass VPN connected successfully")
+                ServiceWatchdog.triggerCheck(1000)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start VPN service", e)
@@ -255,7 +257,7 @@ class MultiBypassVpnService : VpnService() {
 
         return NotificationCompat.Builder(this, MultiBypassApplication.VPN_NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.vpn_connected))
-            .setContentText("DNS маршрутизация и Анти-DPI активны")
+            .setContentText("DNS маршрутизация и десинхронизация активны")
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .addAction(0, getString(R.string.vpn_action_stop), stopIntent)

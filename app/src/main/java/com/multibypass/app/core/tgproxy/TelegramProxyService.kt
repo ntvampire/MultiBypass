@@ -17,6 +17,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class TelegramProxyService : Service() {
 
@@ -26,6 +28,9 @@ class TelegramProxyService : Service() {
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+
+        @Volatile
+        private var instance: TelegramProxyService? = null
 
         fun start(context: Context) {
             val intent = Intent(context, TelegramProxyService::class.java)
@@ -40,36 +45,90 @@ class TelegramProxyService : Service() {
             val intent = Intent(context, TelegramProxyService::class.java)
             context.stopService(intent)
         }
+
+        suspend fun restartProxy(context: Context): Boolean {
+            val current = instance
+            return if (current != null && _isRunning.value) {
+                current.restartNativeProxy()
+            } else {
+                start(context)
+                true
+            }
+        }
+
+        internal fun updateRunningState(running: Boolean) {
+            _isRunning.value = running
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val mutex = Mutex()
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val repository = SettingsRepository.getInstance(applicationContext)
+        if (!repository.tgConfig.value.enabled) {
+            Log.i(TAG, "TG Proxy is disabled in settings, stopping service")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         startForeground(NOTIFICATION_ID, createNotification())
 
         serviceScope.launch {
-            try {
-                val repository = SettingsRepository.getInstance(applicationContext)
-                val secret = repository.tgConfig.value.secret
-                val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
-                if (res == 0) {
-                    _isRunning.value = true
-                    Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:1443 with secret $secret")
-                } else {
-                    Log.e(TAG, "Failed to start Telegram WS Proxy: code $res")
+            mutex.withLock {
+                try {
+                    val secret = repository.tgConfig.value.secret
+                    val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
+                    if (res == 0) {
+                        _isRunning.value = true
+                        Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:1443 with secret $secret")
+                    } else {
+                        Log.e(TAG, "Failed to start Telegram WS Proxy: code $res")
+                        _isRunning.value = false
+                        stopSelf()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error starting Telegram WS Proxy", e)
+                    _isRunning.value = false
                     stopSelf()
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error starting Telegram WS Proxy", e)
-                stopSelf()
             }
         }
 
         return START_STICKY
     }
 
+    suspend fun restartNativeProxy(): Boolean = mutex.withLock {
+        Log.i(TAG, "Restarting Telegram WS Proxy native instance...")
+        try {
+            NativeTgProxy.stopProxy()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping native proxy during restart", e)
+        }
+        delay(300)
+        return try {
+            val repository = SettingsRepository.getInstance(applicationContext)
+            val secret = repository.tgConfig.value.secret
+            val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
+            val success = (res == 0)
+            _isRunning.value = success
+            Log.i(TAG, "Telegram WS Proxy restart result: $res, success=$success")
+            success
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception restarting Telegram WS Proxy", e)
+            _isRunning.value = false
+            false
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         try {
             NativeTgProxy.stopProxy()
         } catch (e: Exception) {

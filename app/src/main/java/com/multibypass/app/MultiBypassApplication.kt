@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 
+import com.multibypass.app.core.watchdog.ServiceWatchdog
+
 class MultiBypassApplication : Application() {
 
     companion object {
@@ -16,6 +18,7 @@ class MultiBypassApplication : Application() {
         super.onCreate()
         setupCrashLogger()
         createNotificationChannels()
+        ServiceWatchdog.init(this)
     }
 
     private fun setupCrashLogger() {
