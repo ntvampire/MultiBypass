@@ -67,7 +67,18 @@ object ServiceWatchdog {
         }
     }
 
+    @Volatile
+    private var isTesting: Boolean = false
+
+    fun setTesting(testing: Boolean) {
+        isTesting = testing
+        Log.d(TAG, "Watchdog setTesting: $testing")
+    }
+
     private suspend fun checkAllServices(source: String) {
+        if (isTesting) {
+            return
+        }
         val context = appContext ?: return
         val repository = SettingsRepository.getInstance(context)
 
@@ -76,6 +87,7 @@ object ServiceWatchdog {
         }
 
         checkMutex.withLock {
+            if (isTesting) return@withLock
             try {
                 checkTelegramProxy(context, repository, source)
                 checkVpnComponents(context, repository, source)
@@ -111,7 +123,8 @@ object ServiceWatchdog {
         }
     }
 
-    private fun checkVpnComponents(context: Context, repository: SettingsRepository, source: String) {
+    private suspend fun checkVpnComponents(context: Context, repository: SettingsRepository, source: String) {
+        if (isTesting) return
         val vpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
         if (!vpnConnected) {
             return
@@ -120,7 +133,7 @@ object ServiceWatchdog {
         // Check ByeByeDPI port
         val byeDpiPort = ByeDpiController.DEFAULT_PORT
         val byeDpiListening = isPortListening("127.0.0.1", byeDpiPort, PROBE_TIMEOUT_MS)
-        if (!byeDpiListening) {
+        if (!byeDpiListening && !isTesting) {
             Log.w(TAG, "Watchdog ($source): ByeByeDPI on port $byeDpiPort is not responding. Restarting...")
             val antiDpiConfig = repository.antiDpiConfig.value
             ByeDpiController.start(strategy = antiDpiConfig.strategy, port = byeDpiPort)

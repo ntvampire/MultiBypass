@@ -47,7 +47,15 @@ fun AppPickerBottomSheet(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
+            val selfPackage = context.packageName
+            val preselectedSet = selectedPackages.toSet()
+
             val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { appInfo ->
+                    if (appInfo.packageName == selfPackage) return@filter false
+                    preselectedSet.contains(appInfo.packageName) ||
+                            pm.getLaunchIntentForPackage(appInfo.packageName) != null
+                }
                 .map { appInfo ->
                     InstalledAppItem(
                         name = appInfo.loadLabel(pm).toString(),
@@ -55,7 +63,10 @@ fun AppPickerBottomSheet(
                         isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                     )
                 }
-                .sortedBy { it.name.lowercase() }
+                .sortedWith(
+                    compareByDescending<InstalledAppItem> { preselectedSet.contains(it.packageName) }
+                        .thenBy { it.name.lowercase() }
+                )
             appList = installed
             isLoading = false
         }

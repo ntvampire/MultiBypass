@@ -1023,6 +1023,8 @@ int on_ignore(struct poolhd *pool, struct eval *val, int etype)
 }
 
 
+struct poolhd *g_active_pool = NULL;
+
 int start_event_loop(int srvfd)
 {
     server_fd = srvfd;
@@ -1037,7 +1039,9 @@ int start_event_loop(int srvfd)
         close(srvfd);
         return -1;
     }
+    g_active_pool = pool;
     loop_event(pool);
+    g_active_pool = NULL;
     
     LOG(LOG_S, "exit\n");
     destroy_pool(pool);

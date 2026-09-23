@@ -5,13 +5,24 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "byedpi/error.h"
+#include "byedpi/conev.h"
 #include "main.h"
 
 extern int server_fd;
 extern int g_dns_redirect_port;
+extern struct poolhd *g_active_pool;
+
 static int g_proxy_running = 0;
+static pthread_mutex_t g_proxy_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_proxy_cond = PTHREAD_COND_INITIALIZER;
 
 struct params default_params = {
         .await_int = 10,
@@ -36,10 +47,17 @@ void reset_params(void) {
 
 JNIEXPORT jint JNICALL
 Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __attribute__((unused)) jobject thiz, jobjectArray args) {
+    pthread_mutex_lock(&g_proxy_lock);
     if (g_proxy_running) {
         LOG(LOG_S, "proxy already running");
+        pthread_mutex_unlock(&g_proxy_lock);
         return -1;
     }
+
+    g_proxy_running = 1;
+    reset_params();
+    optind = 1;
+    pthread_mutex_unlock(&g_proxy_lock);
 
     int in_argc = (*env)->GetArrayLength(env, args);
     int need_prog_name = 1;
@@ -60,6 +78,10 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
 
     if (!argv) {
         LOG(LOG_S, "failed to allocate memory for argv");
+        pthread_mutex_lock(&g_proxy_lock);
+        g_proxy_running = 0;
+        pthread_cond_broadcast(&g_proxy_cond);
+        pthread_mutex_unlock(&g_proxy_lock);
         return -1;
     }
 
@@ -86,14 +108,15 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStartProxy(JNIEnv *env, __att
     }
     
     LOG(LOG_S, "starting proxy with %d args", argc);
-    reset_params();
-    g_proxy_running = 1;
-    optind = 1;
 
     int result = main(argc, argv);
 
     LOG(LOG_S, "proxy return code %d", result);
+
+    pthread_mutex_lock(&g_proxy_lock);
     g_proxy_running = 0;
+    pthread_cond_broadcast(&g_proxy_cond);
+    pthread_mutex_unlock(&g_proxy_lock);
 
     for (int i = 0; i < argc; i++) free(argv[i]);
     free(argv);
@@ -105,14 +128,47 @@ JNIEXPORT jint JNICALL
 Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniStopProxy(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
     LOG(LOG_S, "send shutdown to proxy");
 
+    pthread_mutex_lock(&g_proxy_lock);
     if (!g_proxy_running) {
         LOG(LOG_S, "proxy is not running");
-        return -1;
+        pthread_mutex_unlock(&g_proxy_lock);
+        return 0;
     }
 
-    shutdown(server_fd, SHUT_RDWR);
-    g_proxy_running = 0;
+    if (g_active_pool) {
+        g_active_pool->brk = 1;
+    }
 
+    if (server_fd > 0) {
+        shutdown(server_fd, SHUT_RDWR);
+    }
+
+    int port = ntohs(params.laddr.in.sin_port);
+    if (port > 0) {
+        int wake_sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (wake_sock >= 0) {
+            struct sockaddr_in addr;
+            memset(&addr, 0, sizeof(addr));
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
+            addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+            connect(wake_sock, (struct sockaddr *)&addr, sizeof(addr));
+            close(wake_sock);
+        }
+    }
+
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 1;
+
+    while (g_proxy_running) {
+        if (pthread_cond_timedwait(&g_proxy_cond, &g_proxy_lock, &ts) != 0) {
+            LOG(LOG_S, "timeout waiting for proxy to stop");
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&g_proxy_lock);
     return 0;
 }
 
@@ -120,13 +176,17 @@ JNIEXPORT jint JNICALL
 Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniForceClose(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
     LOG(LOG_S, "closing server socket (fd: %d)", server_fd);
 
-    if (close(server_fd) == -1) {
-        LOG(LOG_S, "failed to close server socket (fd: %d)", server_fd);
-        return -1;
+    pthread_mutex_lock(&g_proxy_lock);
+    if (g_active_pool) {
+        g_active_pool->brk = 1;
     }
-
-    LOG(LOG_S, "proxy socket force close");
+    if (server_fd > 0) {
+        close(server_fd);
+        server_fd = -1;
+    }
     g_proxy_running = 0;
+    pthread_cond_broadcast(&g_proxy_cond);
+    pthread_mutex_unlock(&g_proxy_lock);
 
     return 0;
 }

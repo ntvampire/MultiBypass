@@ -6,6 +6,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object ByeDpiController {
     private const val TAG = "ByeDpiController"
@@ -14,29 +16,44 @@ object ByeDpiController {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
+    private val lock = Mutex()
     private var proxyJob: Job? = null
 
-    fun start(strategy: String = "-f -1 -e 1 -q 1", port: Int = DEFAULT_PORT) {
-        if (_isRunning.value) {
-            stop()
-        }
+    suspend fun start(strategy: String = "-f -1 -e 1 -q 1", port: Int = DEFAULT_PORT) {
+        lock.withLock {
+            stopLocked()
+            delay(150)
 
-        val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy"
-        val args = parseArgs(fullCmd)
+            val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy"
+            val args = parseArgs(fullCmd)
 
-        proxyJob = CoroutineScope(Dispatchers.IO).launch {
-            _isRunning.value = true
-            Log.i(TAG, "Starting ByeByeDPI with args: $fullCmd")
-            val code = ByeDpiProxy.jniStartProxy(args)
-            Log.i(TAG, "ByeByeDPI exited with code: $code")
-            _isRunning.value = false
+            proxyJob = CoroutineScope(Dispatchers.IO).launch {
+                _isRunning.value = true
+                Log.i(TAG, "Starting ByeByeDPI with args: $fullCmd")
+                val code = ByeDpiProxy.jniStartProxy(args)
+                Log.i(TAG, "ByeByeDPI exited with code: $code")
+                _isRunning.value = false
+            }
         }
     }
 
-    fun stop() {
+    suspend fun stop() {
+        lock.withLock {
+            stopLocked()
+        }
+    }
+
+    fun stopAsync() {
+        CoroutineScope(Dispatchers.IO).launch {
+            stop()
+        }
+    }
+
+    private suspend fun stopLocked() {
         try {
             ByeDpiProxy.jniStopProxy()
             proxyJob?.cancel()
+            proxyJob?.join()
             proxyJob = null
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping ByeByeDPI", e)

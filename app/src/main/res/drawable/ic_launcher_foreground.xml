@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Top-Left Ribbon: Material Cyan -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 48,22 L 54,22 L 54,54 L 22,54 L 22,48 C 39,46 46,39 48,22 Z" />
+
+    <!-- Bottom-Right Ribbon: Material Purple -->
+    <path
+        android:fillColor="#7C4DFF"
+        android:pathData="M 60,86 L 54,86 L 54,54 L 86,54 L 86,60 C 69,62 62,69 60,86 Z" />
+
+    <!-- Top-Right Ribbon: Material Royal Blue -->
+    <path
+        android:fillColor="#2979FF"
+        android:pathData="M 54,22 L 60,22 C 62,39 69,46 86,48 L 86,54 L 54,54 Z" />
+
+    <!-- Bottom-Left Ribbon: Material Azure Blue -->
+    <path
+        android:fillColor="#00B0FF"
+        android:pathData="M 22,54 L 22,60 C 39,62 46,69 48,86 L 54,86 L 54,54 Z" />
+
+    <!-- Dark Contrast Shield Border Outline -->
+    <path
+        android:fillColor="#0A1128"
+        android:pathData="M 54,34 L 70,40 L 70,55 C 70,67 60,74 54,77 C 48,74 38,67 38,55 L 38,40 Z" />
+
+    <!-- Shield Left Half: Flat Cyan -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 54,37 L 41,42 L 41,54 C 41,65 49,71 54,74 Z" />
+
+    <!-- Shield Right Half: Flat Royal Blue -->
+    <path
+        android:fillColor="#2979FF"
+        android:pathData="M 54,37 L 67,42 L 67,54 C 67,65 59,71 54,74 Z" />
+
+</vector>

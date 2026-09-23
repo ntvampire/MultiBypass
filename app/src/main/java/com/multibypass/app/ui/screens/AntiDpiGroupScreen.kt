@@ -15,14 +15,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.byedpi.PresetStrategies
+import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.AntiDpiGroupConfig
+import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.components.AppPickerBottomSheet
 import com.multibypass.app.ui.theme.AccentOrange
 import com.multibypass.app.ui.theme.DarkBackground
 import com.multibypass.app.ui.theme.DarkSurface
 import com.multibypass.app.ui.theme.TextSecondary
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +35,7 @@ fun AntiDpiGroupScreen(
     onNavigateToAutoStrategy: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
 
@@ -229,6 +234,11 @@ fun AntiDpiGroupScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = strat))
+                                    if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                        scope.launch {
+                                            ByeDpiController.start(strategy = strat)
+                                        }
+                                    }
                                     showStrategyDialog = false
                                 }
                                 .padding(vertical = 10.dp)

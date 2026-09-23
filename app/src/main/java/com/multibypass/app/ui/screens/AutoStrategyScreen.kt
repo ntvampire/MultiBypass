@@ -14,9 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.byedpi.StrategyTester
+import com.multibypass.app.core.vpn.MultiBypassVpnService
+import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,10 +30,11 @@ fun AutoStrategyScreen(
     BackHandler(onBack = onNavigateBack)
 
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
 
-    val tester = remember { StrategyTester(context) }
+    val tester = remember { StrategyTester(context.applicationContext) }
     val isTesting by tester.isTesting.collectAsState()
     val testResults by tester.testResults.collectAsState()
 
@@ -162,6 +167,11 @@ fun AutoStrategyScreen(
                                     FilledTonalButton(
                                         onClick = {
                                             repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = res.strategy))
+                                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                                coroutineScope.launch {
+                                                    ByeDpiController.start(strategy = res.strategy)
+                                                }
+                                            }
                                         },
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
