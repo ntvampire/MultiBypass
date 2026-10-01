@@ -33,6 +33,8 @@ fun DnsGroupScreen(
     val repository = remember { SettingsRepository.getInstance(context) }
     val dnsConfig by repository.dnsConfig.collectAsState()
 
+    val routedApps by repository.routedApps.collectAsState()
+
     BackHandler(onBack = onNavigateBack)
 
     var showAppPicker by remember { mutableStateOf(false) }
@@ -182,7 +184,7 @@ fun DnsGroupScreen(
                 Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(20.dp), tint = AccentBlue)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Выбрать приложения (${dnsConfig.appPackages.size})",
+                    text = "Приложения для обхода (${routedApps.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
@@ -273,11 +275,11 @@ fun DnsGroupScreen(
 
     if (showAppPicker) {
         AppPickerBottomSheet(
-            title = "Приложения для Своего DNS",
-            selectedPackages = dnsConfig.appPackages,
+            title = "Приложения для обхода",
+            selectedPackages = routedApps,
             onDismiss = { showAppPicker = false },
             onSave = { updated ->
-                repository.updateDnsConfig(dnsConfig.copy(appPackages = updated))
+                repository.updateRoutedApps(updated)
             }
         )
     }

@@ -28,6 +28,8 @@ import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
+import com.multibypass.app.ui.components.AppPickerBottomSheet
+import com.multibypass.app.ui.components.ServiceHealthWidget
 import com.multibypass.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,6 +50,10 @@ fun MainScreen(
     val dnsConfig by repository.dnsConfig.collectAsState()
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
     val tgConfig by repository.tgConfig.collectAsState()
+    val routedApps by repository.routedApps.collectAsState()
+    val routeAllApps by repository.routeAllApps.collectAsState()
+
+    var showAppPicker by remember { mutableStateOf(false) }
 
     val isConnected = vpnStatus == VpnStatus.CONNECTED
     val isConnecting = vpnStatus == VpnStatus.CONNECTING
@@ -78,6 +84,20 @@ fun MainScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = AccentOrange.copy(alpha = 0.2f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange)
+                        ) {
+                            Text(
+                                text = "BETA",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentOrange,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -167,7 +187,90 @@ fun MainScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Live Service Health Check Widget
+            ServiceHealthWidget(
+                isVpnConnected = isConnected,
+                isTgProxyRunning = isTgProxyRunning
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Unified App Routing Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Apps, contentDescription = null, tint = GreenPrimary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Приложения для обхода",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (routeAllApps) "Все" else "Выбранные",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (routeAllApps) AccentOrange else GreenPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Switch(
+                                checked = !routeAllApps,
+                                onCheckedChange = { isSelectedOnly ->
+                                    repository.setRouteAllApps(!isSelectedOnly)
+                                }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (routeAllApps) {
+                            "Глобальный режим: все приложения на устройстве идут через MultiBypass"
+                        } else {
+                            "Раздельное туннелирование: ${routedApps.size} выбрано (остальные напрямую)"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    if (!routeAllApps) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { showAppPicker = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp), tint = GreenPrimary)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Настроить приложения (${routedApps.size})",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Group 1: Custom DNS Card
             Card(
@@ -207,7 +310,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов: ${dnsConfig.domains.size} | Приложений: ${dnsConfig.appPackages.size}",
+                        text = "Адресов: ${dnsConfig.domains.size} | Приложений: ${if (routeAllApps) "Все" else "${routedApps.size}"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -254,7 +357,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов: ${antiDpiConfig.domains.size} | Приложений: ${antiDpiConfig.appPackages.size}",
+                        text = "Адресов: ${antiDpiConfig.domains.size} | Приложений: ${if (routeAllApps) "Все" else "${routedApps.size}"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -333,5 +436,16 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showAppPicker) {
+        AppPickerBottomSheet(
+            title = "Приложения для обхода",
+            selectedPackages = routedApps,
+            onDismiss = { showAppPicker = false },
+            onSave = { updated ->
+                repository.updateRoutedApps(updated)
+            }
+        )
     }
 }

@@ -9,49 +9,21 @@ object DnsPresets {
             name = "Comss.one DNS",
             standardIp = "92.223.109.31",
             dohUrl = "https://dns.comss.one/dns-query",
-            description = "Оптимизирован для обхода региональных ограничений"
-        ),
-        DnsPreset(
-            id = "adguard",
-            name = "AdGuard DNS",
-            standardIp = "94.140.14.14",
-            dohUrl = "https://dns.adguard-dns.com/dns-query",
-            description = "Блокировка рекламы и защита конфиденциальности"
-        ),
-        DnsPreset(
-            id = "google",
-            name = "Google Public DNS",
-            standardIp = "8.8.8.8",
-            dohUrl = "https://dns.google/dns-query",
-            description = "Быстрый и надежный глобальный DNS"
-        ),
-        DnsPreset(
-            id = "quad9",
-            name = "Quad9 DNS",
-            standardIp = "9.9.9.9",
-            dohUrl = "https://dns.quad9.net/dns-query",
-            description = "Защита от вредоносных доменов и приватность"
-        ),
-        DnsPreset(
-            id = "yandex",
-            name = "Яндекс DNS",
-            standardIp = "77.88.8.8",
-            dohUrl = "https://common.dot.dns.yandex.net/dns-query",
-            description = "Быстрый DNS с серверами в РФ"
+            description = "SmartDNS: ChatGPT, Claude, Copilot, Spotify, Xbox, Canva, Notion"
         ),
         DnsPreset(
             id = "xbox",
-            name = "Xbox DNS",
+            name = "Xbox / Microsoft DNS",
             standardIp = "185.51.200.2",
             dohUrl = "https://dns.comss.one/dns-query",
-            description = "DNS для доступа к Xbox Live / Microsoft"
+            description = "Специализированный DNS для Xbox Live, Microsoft Store и сетевых игр"
         ),
         DnsPreset(
             id = "dns_ai",
             name = "DNS-AI",
-            standardIp = "149.112.112.11",
-            dohUrl = "https://dns.quad9.net/dns-query",
-            description = "Маршрутизация к серверам искусственного интеллекта"
+            standardIp = "92.223.109.31",
+            dohUrl = "https://dns.comss.one/dns-query",
+            description = "Оптимизация доступа к ИИ: OpenAI ChatGPT, Anthropic Claude, Midjourney"
         ),
         DnsPreset(
             id = "nextdns",
@@ -59,7 +31,7 @@ object DnsPresets {
             standardIp = "45.90.28.0",
             dohUrl = "https://dns.nextdns.io/",
             requiresProfileId = true,
-            description = "Персональный облачный DNS (требуется ID профиля)"
+            description = "Персональный облачный DNS (требуется ID профиля, например: abc123)"
         ),
         DnsPreset(
             id = "custom",

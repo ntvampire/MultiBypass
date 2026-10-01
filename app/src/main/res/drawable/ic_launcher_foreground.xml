@@ -39,4 +39,22 @@
         android:fillColor="#2979FF"
         android:pathData="M 54,37 L 67,42 L 67,54 C 67,65 59,71 54,74 Z" />
 
+    <!-- BETA Badge Dark Outline -->
+    <path
+        android:fillColor="#0A1128"
+        android:pathData="M 64,75 L 88,75 A 8.5,8.5 0 0 1 96.5,83.5 A 8.5,8.5 0 0 1 88,92 L 64,92 A 8.5,8.5 0 0 1 55.5,83.5 A 8.5,8.5 0 0 1 64,75 Z" />
+
+    <!-- BETA Badge Amber Fill -->
+    <path
+        android:fillColor="#FF9100"
+        android:pathData="M 64,76.5 L 88,76.5 A 7,7 0 0 1 95,83.5 A 7,7 0 0 1 88,90.5 L 64,90.5 A 7,7 0 0 1 57,83.5 A 7,7 0 0 1 64,76.5 Z" />
+
+    <!-- BETA Badge Text Paths -->
+    <path
+        android:strokeColor="#0A1128"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 62.5,80.5 L 62.5,86.5 M 62.5,80.5 L 65,80.5 C 66.2,80.5 66.2,83.2 62.5,83.2 M 62.5,83.2 L 65.5,83.2 C 66.8,83.2 66.8,86.5 62.5,86.5 M 69,80.5 L 69,86.5 M 69,80.5 L 72.5,80.5 M 69,83.5 L 72,83.5 M 69,86.5 L 72.5,86.5 M 75,80.5 L 80,80.5 M 77.5,80.5 L 77.5,86.5 M 82.5,86.5 L 84.5,80.5 L 86.5,86.5 M 83.2,84.5 L 85.8,84.5" />
+
 </vector>

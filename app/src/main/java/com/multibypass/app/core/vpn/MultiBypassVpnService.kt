@@ -108,10 +108,15 @@ class MultiBypassVpnService : VpnService() {
 
                 // 3. Configure DNS & Local DoH Server
                 val effectiveDns = dnsConfig.getEffectiveDns()
+                val fallbackStandardIp = dnsConfig.getEffectiveStandardIp()
                 val dnsServer = if (dnsConfig.mode == DnsMode.DOH) {
                     try {
                         dohServer?.stop()
-                        dohServer = LocalDohServer(port = 5353, dohUrl = effectiveDns).apply { start() }
+                        dohServer = LocalDohServer(
+                            port = 5353,
+                            dohUrl = effectiveDns,
+                            fallbackStandardIp = fallbackStandardIp
+                        ).apply { start() }
                         ByeDpiProxy.setDnsRedirectPort(5353)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
@@ -126,10 +131,11 @@ class MultiBypassVpnService : VpnService() {
                     effectiveDns
                 }
 
-                val allAllowedApps = (dnsConfig.appPackages + antiDpiConfig.appPackages).distinct()
+                val routeAll = repository.routeAllApps.value
+                val allowedApps = repository.routedApps.value
 
                 val builder = Builder().apply {
-                    setSession("MultiBypass")
+                    setSession("MultiBypass Beta")
                     setConfigureIntent(
                         PendingIntent.getActivity(
                             this@MultiBypassVpnService,
@@ -146,10 +152,10 @@ class MultiBypassVpnService : VpnService() {
                         setMetered(false)
                     }
 
-                    // Strict routing: If specific apps are selected, isolate them!
+                    // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
-                    if (allAllowedApps.isNotEmpty()) {
-                        for (pkg in allAllowedApps) {
+                    if (!routeAll && allowedApps.isNotEmpty()) {
+                        for (pkg in allowedApps) {
                             try {
                                 addAllowedApplication(pkg)
                             } catch (e: Exception) {
@@ -158,7 +164,11 @@ class MultiBypassVpnService : VpnService() {
                         }
                     } else {
                         // Global mode: exclude self to avoid VPN loops
-                        addDisallowedApplication(packageName)
+                        try {
+                            addDisallowedApplication(packageName)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Cannot add disallowed app: $packageName", e)
+                        }
                     }
                 }
 
