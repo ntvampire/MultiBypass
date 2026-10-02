@@ -37,6 +37,13 @@ object PresetStrategies {
         "-f-200 -Qr -s3:5+sm -a1 -As -d1 -s4+sm -s8+sh -f-300 -d6+sh -a1"
     )
 
+    val defaultTestTargets = listOf(
+        TestTarget("YouTube", "https://www.youtube.com/generate_204"),
+        TestTarget("Discord", "https://discord.com"),
+        TestTarget("Instagram", "https://www.instagram.com"),
+        TestTarget("Rutracker", "https://rutracker.org")
+    )
+
     fun loadStrategies(context: Context): List<String> {
         return try {
             context.assets.open("proxytest_strategies.list").bufferedReader().useLines { lines ->
@@ -47,25 +54,15 @@ object PresetStrategies {
         }
     }
 
-    fun loadTestSites(context: Context): List<String> {
-        val list = mutableListOf<String>()
-        val files = listOf("proxytest_youtube.sites", "proxytest_discord.sites", "proxytest_general.sites")
-        for (f in files) {
-            try {
-                context.assets.open(f).bufferedReader().useLines { lines ->
-                    lines.map { it.trim() }
-                        .filter { it.isNotBlank() && !it.startsWith("#") }
-                        .forEach { list.add(if (it.startsWith("http")) it else "https://$it") }
-                }
-            } catch (_: Exception) {}
-        }
-        return if (list.isNotEmpty()) list.distinct().take(6) else listOf(
-            "https://www.youtube.com/generate_204",
-            "https://discord.com",
-            "https://www.google.com/generate_204"
-        )
+    fun loadTestTargets(context: Context): List<TestTarget> {
+        return defaultTestTargets
     }
 }
+
+data class TestTarget(
+    val name: String,
+    val url: String
+)
 
 class StrategyTester(private val context: Context) {
     companion object {
@@ -90,7 +87,10 @@ class StrategyTester(private val context: Context) {
             .build()
     }
 
-    fun startTest(onComplete: (StrategyTestResult?) -> Unit = {}) {
+    fun startTest(
+        targets: List<TestTarget> = PresetStrategies.defaultTestTargets,
+        onComplete: (StrategyTestResult?) -> Unit = {}
+    ) {
         if (_isTesting.value) return
 
         testJob?.cancel()
@@ -107,13 +107,12 @@ class StrategyTester(private val context: Context) {
 
             try {
                 val strategies = PresetStrategies.loadStrategies(context)
-                val sites = PresetStrategies.loadTestSites(context)
                 val results = mutableListOf<StrategyTestResult>()
 
                 for (strategy in strategies) {
                     if (!isActive) break
 
-                    val result = testSingleStrategy(strategy, sites)
+                    val result = testSingleStrategy(strategy, targets)
                     results.add(result)
                     _testResults.value = results.sortedWith(
                         compareByDescending<StrategyTestResult> { it.isWorking }
@@ -169,7 +168,7 @@ class StrategyTester(private val context: Context) {
         }
     }
 
-    private suspend fun testSingleStrategy(strategy: String, sites: List<String>): StrategyTestResult {
+    private suspend fun testSingleStrategy(strategy: String, targets: List<TestTarget>): StrategyTestResult {
         val effectiveStrategy = if (strategy.contains("{sni}")) {
             strategy.replace("{sni}", "www.google.com")
         } else {
@@ -184,8 +183,9 @@ class StrategyTester(private val context: Context) {
                 strategy = strategy,
                 isWorking = false,
                 latencyMs = 9999L,
-                testedSitesCount = sites.size,
-                successfulSitesCount = 0
+                testedSitesCount = targets.size,
+                successfulSitesCount = 0,
+                workingServices = emptyList()
             )
         }
 
@@ -194,17 +194,22 @@ class StrategyTester(private val context: Context) {
 
         var successCount = 0
         var totalLatency = 0L
+        val workingServices = mutableListOf<String>()
 
-        for (site in sites) {
+        for (target in targets) {
             if (!coroutineContext.isActive) break
             val startTime = System.currentTimeMillis()
             try {
-                val request = Request.Builder().url(site).build()
+                val request = Request.Builder()
+                    .url(target.url)
+                    .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
+                    .build()
                 val response = httpClient.newCall(request).execute()
                 if (response.isSuccessful || response.code in 200..399) {
                     val lat = System.currentTimeMillis() - startTime
                     totalLatency += lat
                     successCount++
+                    workingServices.add(target.name)
                 }
                 response.close()
             } catch (_: Throwable) {}
@@ -217,8 +222,9 @@ class StrategyTester(private val context: Context) {
             strategy = strategy,
             isWorking = isWorking,
             latencyMs = avgLatency,
-            testedSitesCount = sites.size,
-            successfulSitesCount = successCount
+            testedSitesCount = targets.size,
+            successfulSitesCount = successCount,
+            workingServices = workingServices
         )
     }
 

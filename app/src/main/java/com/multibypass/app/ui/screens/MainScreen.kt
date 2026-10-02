@@ -205,36 +205,40 @@ fun MainScreen(
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    // Header Row: Title & Icon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Apps, contentDescription = null, tint = GreenPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Приложения для обхода",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Mode Selection Row: Switch & Mode Label
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Apps, contentDescription = null, tint = GreenPrimary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Приложения для обхода",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (routeAllApps) "Все" else "Выбранные",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (routeAllApps) AccentOrange else GreenPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Switch(
-                                checked = !routeAllApps,
-                                onCheckedChange = { isSelectedOnly ->
-                                    repository.setRouteAllApps(!isSelectedOnly)
-                                }
-                            )
-                        }
+                        Text(
+                            text = if (routeAllApps) "Все приложения (глобально)" else "Только выбранные (раздельно)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (routeAllApps) AccentOrange else GreenPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Switch(
+                            checked = !routeAllApps,
+                            onCheckedChange = { isSelectedOnly ->
+                                repository.setRouteAllApps(!isSelectedOnly)
+                            }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -303,14 +307,14 @@ fun MainScreen(
 
                     val presetName = DnsPresets.findById(dnsConfig.presetId).name
                     Text(
-                        text = "Сервер: $presetName (${dnsConfig.mode.name})",
+                        text = "Сервер: $presetName",
                         style = MaterialTheme.typography.bodyMedium,
                         color = AccentBlue
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов: ${dnsConfig.domains.size} | Приложений: ${if (routeAllApps) "Все" else "${routedApps.size}"}",
+                        text = "Адресов для разблокировки: ${dnsConfig.domains.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -357,7 +361,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов: ${antiDpiConfig.domains.size} | Приложений: ${if (routeAllApps) "Все" else "${routedApps.size}"}",
+                        text = "Адресов для разблокировки: ${antiDpiConfig.domains.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

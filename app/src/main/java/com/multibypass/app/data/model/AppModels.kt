@@ -137,5 +137,6 @@ data class StrategyTestResult(
     val isWorking: Boolean,
     val latencyMs: Long,
     val testedSitesCount: Int,
-    val successfulSitesCount: Int
+    val successfulSitesCount: Int,
+    val workingServices: List<String> = emptyList()
 )

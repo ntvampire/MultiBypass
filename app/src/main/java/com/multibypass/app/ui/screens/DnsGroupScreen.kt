@@ -18,7 +18,6 @@ import com.multibypass.app.core.dns.DnsPresets
 import com.multibypass.app.data.model.DnsGroupConfig
 import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.repository.SettingsRepository
-import com.multibypass.app.ui.components.AppPickerBottomSheet
 import com.multibypass.app.ui.theme.AccentBlue
 import com.multibypass.app.ui.theme.DarkBackground
 import com.multibypass.app.ui.theme.DarkSurface
@@ -33,11 +32,8 @@ fun DnsGroupScreen(
     val repository = remember { SettingsRepository.getInstance(context) }
     val dnsConfig by repository.dnsConfig.collectAsState()
 
-    val routedApps by repository.routedApps.collectAsState()
-
     BackHandler(onBack = onNavigateBack)
 
-    var showAppPicker by remember { mutableStateOf(false) }
     var newDomainInput by remember { mutableStateOf("") }
     var expandedPresets by remember { mutableStateOf(false) }
 
@@ -64,29 +60,37 @@ fun DnsGroupScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Protocol Mode Toggle
-            Text("Протокол DNS:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                FilterChip(
-                    selected = dnsConfig.mode == DnsMode.DOH,
-                    onClick = { repository.updateDnsConfig(dnsConfig.copy(mode = DnsMode.DOH)) },
-                    label = { Text("DNS-over-HTTPS (DoH)") },
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = if (dnsConfig.mode == DnsMode.DOH) {
-                        { Icon(Icons.Default.Check, contentDescription = null) }
-                    } else null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                FilterChip(
-                    selected = dnsConfig.mode == DnsMode.STANDARD,
-                    onClick = { repository.updateDnsConfig(dnsConfig.copy(mode = DnsMode.STANDARD)) },
-                    label = { Text("Стандартный (IP)") },
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = if (dnsConfig.mode == DnsMode.STANDARD) {
-                        { Icon(Icons.Default.Check, contentDescription = null) }
-                    } else null
-                )
+            // Automatic Dual-Mode Banner
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = AccentBlue,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Автоматический режим (DoH + Резерв)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Запросы шифруются через DoH. Если провайдер блокирует DoH, MultiBypass автоматически переключается на стандартный DNS этого же сервиса.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -151,43 +155,22 @@ fun DnsGroupScreen(
             // Custom DNS inputs
             if (dnsConfig.presetId == "custom") {
                 Spacer(modifier = Modifier.height(12.dp))
-                if (dnsConfig.mode == DnsMode.DOH) {
-                    OutlinedTextField(
-                        value = dnsConfig.customDohUrl,
-                        onValueChange = { repository.updateDnsConfig(dnsConfig.copy(customDohUrl = it)) },
-                        label = { Text("URL DoH сервера") },
-                        placeholder = { Text("https://example.com/dns-query") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = dnsConfig.customStandardIp,
-                        onValueChange = { repository.updateDnsConfig(dnsConfig.copy(customStandardIp = it)) },
-                        label = { Text("IP адрес DNS сервера") },
-                        placeholder = { Text("1.1.1.1") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Application Selection
-            Button(
-                onClick = { showAppPicker = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(20.dp), tint = AccentBlue)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Приложения для обхода (${routedApps.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                OutlinedTextField(
+                    value = dnsConfig.customDohUrl,
+                    onValueChange = { repository.updateDnsConfig(dnsConfig.copy(customDohUrl = it)) },
+                    label = { Text("URL DoH сервера (основной)") },
+                    placeholder = { Text("https://dns.example.com/dns-query") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = dnsConfig.customStandardIp,
+                    onValueChange = { repository.updateDnsConfig(dnsConfig.copy(customStandardIp = it)) },
+                    label = { Text("IP адрес стандартного DNS (резервный)") },
+                    placeholder = { Text("92.223.109.31") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
 
@@ -271,16 +254,5 @@ fun DnsGroupScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
         }
-    }
-
-    if (showAppPicker) {
-        AppPickerBottomSheet(
-            title = "Приложения для обхода",
-            selectedPackages = routedApps,
-            onDismiss = { showAppPicker = false },
-            onSave = { updated ->
-                repository.updateRoutedApps(updated)
-            }
-        )
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.byedpi.StrategyTester
 import com.multibypass.app.core.vpn.MultiBypassVpnService
@@ -80,10 +81,39 @@ fun AutoStrategyScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Приложение поочередно проверяет стратегии ByeDPI против YouTube и Discord, измеряя пинг и стабильность.",
+                        text = "Приложение поочередно проверяет стратегии ByeDPI против популярных сервисов, измеряя пинг и стабильность.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Проверяемые сервисы:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("YouTube", "Discord", "Instagram", "Rutracker").forEach { serviceName ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = DarkSurfaceVariant
+                            ) {
+                                Text(
+                                    text = serviceName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -146,15 +176,45 @@ fun AutoStrategyScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (res.isWorking) {
+                                if (res.isWorking) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("${res.latencyMs} мс (${res.successfulSitesCount}/${res.testedSitesCount} сайтов)", color = GreenPrimary, style = MaterialTheme.typography.bodySmall)
-                                    } else {
+                                        Text(
+                                            text = "${res.latencyMs} мс (${res.successfulSitesCount}/${res.testedSitesCount})",
+                                            color = GreenPrimary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (res.workingServices.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            res.workingServices.forEach { sName ->
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = GreenPrimary.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "$sName ✓",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = GreenPrimary,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Не работает", color = RedDanger, style = MaterialTheme.typography.bodySmall)
+                                        Text("Не работает ни один сервис", color = RedDanger, style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                             }

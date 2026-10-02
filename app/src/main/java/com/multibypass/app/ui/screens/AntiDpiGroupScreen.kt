@@ -21,7 +21,6 @@ import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
-import com.multibypass.app.ui.components.AppPickerBottomSheet
 import com.multibypass.app.ui.theme.AccentOrange
 import com.multibypass.app.ui.theme.DarkBackground
 import com.multibypass.app.ui.theme.DarkSurface
@@ -38,11 +37,9 @@ fun AntiDpiGroupScreen(
     val scope = rememberCoroutineScope()
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
-    val routedApps by repository.routedApps.collectAsState()
 
     BackHandler(onBack = onNavigateBack)
 
-    var showAppPicker by remember { mutableStateOf(false) }
     var newDomainInput by remember { mutableStateOf("") }
     var showStrategyDialog by remember { mutableStateOf(false) }
 
@@ -97,7 +94,7 @@ fun AntiDpiGroupScreen(
                         ) {
                             Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Список пресетов")
+                            Text("Пресеты")
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
@@ -111,26 +108,14 @@ fun AntiDpiGroupScreen(
                             Text("Автоподбор")
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "💡 Автоподбор поочередно проверяет стратегии на YouTube, Discord, Instagram и Rutracker для поиска рабочего обхода.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Application Selection
-            Button(
-                onClick = { showAppPicker = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(20.dp), tint = AccentOrange)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Приложения для обхода (${routedApps.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -252,17 +237,6 @@ fun AntiDpiGroupScreen(
                 TextButton(onClick = { showStrategyDialog = false }) {
                     Text("Отмена")
                 }
-            }
-        )
-    }
-
-    if (showAppPicker) {
-        AppPickerBottomSheet(
-            title = "Приложения для обхода",
-            selectedPackages = routedApps,
-            onDismiss = { showAppPicker = false },
-            onSave = { updated ->
-                repository.updateRoutedApps(updated)
             }
         )
     }
