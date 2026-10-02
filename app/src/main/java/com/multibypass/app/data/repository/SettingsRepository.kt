@@ -17,6 +17,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_DNS_CONFIG = "key_dns_config"
         private const val KEY_ANTIDPI_CONFIG = "key_antidpi_config"
         private const val KEY_TG_CONFIG = "key_tg_config"
+        private const val KEY_TG_SECRET = "key_tg_secret"
         private const val KEY_BOOT_AUTOSTART = "key_boot_autostart"
         private const val KEY_WATCHDOG_ENABLED = "key_watchdog_enabled"
         private const val KEY_ROUTED_APPS = "key_routed_apps"
@@ -82,7 +83,10 @@ class SettingsRepository(context: Context) {
 
     fun updateTgConfig(config: TelegramProxyConfig) {
         _tgConfig.value = config
-        prefs.edit().putString(KEY_TG_CONFIG, gson.toJson(config)).apply()
+        prefs.edit()
+            .putString(KEY_TG_CONFIG, gson.toJson(config))
+            .putString(KEY_TG_SECRET, config.secret)
+            .apply()
     }
 
     fun setBootAutoStart(enabled: Boolean) {
@@ -127,28 +131,38 @@ class SettingsRepository(context: Context) {
     }
 
     private fun loadTgConfig(): TelegramProxyConfig {
+        val savedSecret = prefs.getString(KEY_TG_SECRET, null)
         val json = prefs.getString(KEY_TG_CONFIG, null)
-        val config = if (json != null) {
+        var config: TelegramProxyConfig? = null
+
+        if (json != null) {
             try {
-                gson.fromJson(json, TelegramProxyConfig::class.java) ?: TelegramProxyConfig(secret = generateRandomHexSecret())
-            } catch (_: Exception) {
-                TelegramProxyConfig(secret = generateRandomHexSecret())
-            }
-        } else {
-            TelegramProxyConfig(secret = generateRandomHexSecret())
+                config = gson.fromJson(json, TelegramProxyConfig::class.java)
+            } catch (_: Exception) {}
         }
 
-        val isSecretValid = config.secret.length == 32 &&
-                config.secret.all { it in "0123456789abcdefABCDEF" } &&
-                config.secret != "00000000000000000000000000000000"
+        val secretCandidate = config?.secret ?: savedSecret
+        val isCandidateValid = secretCandidate != null &&
+                secretCandidate.length == 32 &&
+                secretCandidate.all { it in "0123456789abcdefABCDEF" } &&
+                secretCandidate != "00000000000000000000000000000000"
 
-        return if (!isSecretValid) {
-            val updated = config.copy(secret = generateRandomHexSecret())
-            prefs.edit().putString(KEY_TG_CONFIG, gson.toJson(updated)).apply()
-            updated
+        val finalSecret = if (isCandidateValid && secretCandidate != null) {
+            secretCandidate
         } else {
-            config
+            generateRandomHexSecret()
         }
+
+        val finalConfig = (config ?: TelegramProxyConfig()).copy(secret = finalSecret)
+
+        if (json == null || savedSecret == null || !isCandidateValid) {
+            prefs.edit()
+                .putString(KEY_TG_CONFIG, gson.toJson(finalConfig))
+                .putString(KEY_TG_SECRET, finalSecret)
+                .apply()
+        }
+
+        return finalConfig
     }
 
     private fun generateRandomHexSecret(): String {

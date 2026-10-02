@@ -29,7 +29,6 @@ import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.components.AppPickerBottomSheet
-import com.multibypass.app.ui.components.ServiceHealthWidget
 import com.multibypass.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +36,7 @@ import com.multibypass.app.ui.theme.*
 fun MainScreen(
     onNavigateToDns: () -> Unit,
     onNavigateToAntiDpi: () -> Unit,
-    onNavigateToAutoStrategy: () -> Unit,
+    onNavigateToAutoStrategy: () -> Unit = {},
     onNavigateToSettings: () -> Unit,
     onRequestVpnPermission: () -> Unit
 ) {
@@ -186,14 +185,6 @@ fun MainScreen(
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Live Service Health Check Widget
-            ServiceHealthWidget(
-                isVpnConnected = isConnected,
-                isTgProxyRunning = isTgProxyRunning
-            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -365,18 +356,6 @@ fun MainScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = { onNavigateToAutoStrategy() },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.AutoMode, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Автоподбор лучшей стратегии")
-                    }
                 }
             }
 

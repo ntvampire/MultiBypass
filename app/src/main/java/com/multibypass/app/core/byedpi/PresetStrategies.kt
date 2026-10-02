@@ -39,9 +39,8 @@ object PresetStrategies {
 
     val defaultTestTargets = listOf(
         TestTarget("YouTube", "https://www.youtube.com/generate_204"),
-        TestTarget("Discord", "https://discord.com"),
         TestTarget("Instagram", "https://www.instagram.com"),
-        TestTarget("Rutracker", "https://rutracker.org")
+        TestTarget("X (Twitter)", "https://x.com")
     )
 
     fun loadStrategies(context: Context): List<String> {
@@ -203,9 +202,10 @@ class StrategyTester(private val context: Context) {
                 val request = Request.Builder()
                     .url(target.url)
                     .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
+                    .header("Accept", "*/*")
                     .build()
                 val response = httpClient.newCall(request).execute()
-                if (response.isSuccessful || response.code in 200..399) {
+                if (response.isSuccessful || response.code in 200..499) {
                     val lat = System.currentTimeMillis() - startTime
                     totalLatency += lat
                     successCount++

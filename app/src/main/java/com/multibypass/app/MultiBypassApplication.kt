@@ -12,6 +12,7 @@ class MultiBypassApplication : Application() {
     companion object {
         const val VPN_NOTIFICATION_CHANNEL_ID = "multibypass_vpn_channel"
         const val TG_NOTIFICATION_CHANNEL_ID = "multibypass_tg_channel"
+        const val UPDATE_NOTIFICATION_CHANNEL_ID = "multibypass_update_channel"
     }
 
     override fun onCreate() {
@@ -54,8 +55,18 @@ class MultiBypassApplication : Application() {
                 setShowBadge(false)
             }
 
+            val updateChannel = NotificationChannel(
+                UPDATE_NOTIFICATION_CHANNEL_ID,
+                "Обновления MultiBypass",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Уведомления о загрузке и установке обновлений"
+                setShowBadge(false)
+            }
+
             notificationManager.createNotificationChannel(vpnChannel)
             notificationManager.createNotificationChannel(tgChannel)
+            notificationManager.createNotificationChannel(updateChannel)
         }
     }
 }

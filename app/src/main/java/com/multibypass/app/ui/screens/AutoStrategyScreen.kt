@@ -99,7 +99,7 @@ fun AutoStrategyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf("YouTube", "Discord", "Instagram", "Rutracker").forEach { serviceName ->
+                        listOf("YouTube", "Instagram", "X (Twitter)").forEach { serviceName ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = DarkSurfaceVariant
