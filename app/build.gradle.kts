@@ -11,11 +11,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.multibypass.app.beta"
+        applicationId = "com.multibypass.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.1.0-beta.4"
+        versionCode = 10
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

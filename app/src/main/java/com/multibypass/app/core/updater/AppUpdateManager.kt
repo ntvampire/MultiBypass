@@ -160,7 +160,7 @@ object AppUpdateManager {
         val notifId = 1002
         val notifBuilder = NotificationCompat.Builder(context, MultiBypassApplication.UPDATE_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_vpn)
-            .setContentTitle("MultiBypass Beta")
+            .setContentTitle(context.getString(R.string.app_name))
             .setContentText("Загрузка обновления...")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -256,7 +256,7 @@ object AppUpdateManager {
 
             val completeNotif = NotificationCompat.Builder(context, MultiBypassApplication.UPDATE_NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_vpn)
-                .setContentTitle("MultiBypass Beta")
+                .setContentTitle(context.getString(R.string.app_name))
                 .setContentText("Обновление загружено. Нажмите для установки.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(false)

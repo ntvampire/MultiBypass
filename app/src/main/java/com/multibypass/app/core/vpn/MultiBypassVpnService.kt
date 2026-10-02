@@ -135,7 +135,7 @@ class MultiBypassVpnService : VpnService() {
                 val allowedApps = repository.routedApps.value
 
                 val builder = Builder().apply {
-                    setSession("MultiBypass Beta")
+                    setSession(getString(R.string.app_name))
                     setConfigureIntent(
                         PendingIntent.getActivity(
                             this@MultiBypassVpnService,
