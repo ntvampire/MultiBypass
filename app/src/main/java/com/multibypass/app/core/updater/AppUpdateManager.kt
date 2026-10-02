@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -27,7 +28,7 @@ data class UpdateInfo(
 object AppUpdateManager {
     private const val TAG = "AppUpdateManager"
     private const val GITHUB_REPO = "ntvampire/MultiBypass"
-    private const val RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+    private const val RELEASES_API_URL = "https://api.github.com/repos/$GITHUB_REPO/releases"
 
     private val _downloadProgress = MutableStateFlow<Int?>(null)
     val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
@@ -46,11 +47,30 @@ object AppUpdateManager {
 
             if (connection.responseCode in 200..299) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
+                val releases = JSONArray(response)
+                val isBetaTrack = BuildConfig.VERSION_NAME.contains("beta", ignoreCase = true)
 
-                val tagName = json.optString("tag_name", "")
-                val releaseNotes = json.optString("body", "Новый релиз MultiBypass")
-                val assets = json.optJSONArray("assets")
+                var targetRelease: JSONObject? = null
+                for (i in 0 until releases.length()) {
+                    val rel = releases.optJSONObject(i) ?: continue
+                    val isPrerelease = rel.optBoolean("prerelease", false)
+                    // If running stable, do not offer beta/prereleases. If running beta, check all releases.
+                    if (!isBetaTrack && isPrerelease) continue
+
+                    val tag = rel.optString("tag_name", "")
+                    if (isVersionNewer(tag, BuildConfig.VERSION_NAME)) {
+                        targetRelease = rel
+                        break
+                    }
+                }
+
+                if (targetRelease == null) {
+                    return@withContext null
+                }
+
+                val tagName = targetRelease.optString("tag_name", "")
+                val releaseNotes = targetRelease.optString("body", "Новый релиз MultiBypass")
+                val assets = targetRelease.optJSONArray("assets")
 
                 var apkDownloadUrl = ""
                 if (assets != null) {
@@ -90,14 +110,11 @@ object AppUpdateManager {
                     }
                 }
 
-                val currentVersion = BuildConfig.VERSION_NAME
-                val isNewer = isVersionNewer(tagName, currentVersion)
-
                 UpdateInfo(
                     tagName = tagName,
                     downloadUrl = apkDownloadUrl,
                     releaseNotes = releaseNotes,
-                    isNewer = isNewer
+                    isNewer = true
                 )
             } else {
                 Log.w(TAG, "Update check failed with code: ${connection.responseCode}")
@@ -171,16 +188,41 @@ object AppUpdateManager {
     private fun isVersionNewer(remoteTag: String, currentVersion: String): Boolean {
         val cleanRemote = remoteTag.removePrefix("v").trim()
         val cleanCurrent = currentVersion.removePrefix("v").trim()
-        val remoteParts = cleanRemote.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = cleanCurrent.split(".").mapNotNull { it.toIntOrNull() }
 
-        val maxLen = maxOf(remoteParts.size, currentParts.size)
+        // Split into base version and prerelease: e.g. "1.1.0-beta.2" -> ("1.1.0", "beta.2")
+        val remoteParts = cleanRemote.split("-", limit = 2)
+        val currentParts = cleanCurrent.split("-", limit = 2)
+
+        val remoteNums = remoteParts[0].split(".").mapNotNull { it.toIntOrNull() }
+        val currentNums = currentParts[0].split(".").mapNotNull { it.toIntOrNull() }
+
+        val maxLen = maxOf(remoteNums.size, currentNums.size)
         for (i in 0 until maxLen) {
-            val r = remoteParts.getOrElse(i) { 0 }
-            val c = currentParts.getOrElse(i) { 0 }
+            val r = remoteNums.getOrElse(i) { 0 }
+            val c = currentNums.getOrElse(i) { 0 }
             if (r > c) return true
             if (r < c) return false
         }
+
+        // Base numbers are equal: check prerelease component
+        val remotePre = remoteParts.getOrNull(1)
+        val currentPre = currentParts.getOrNull(1)
+
+        // A final/stable release is newer than a prerelease of the same base (e.g. 1.1.0 > 1.1.0-beta.2)
+        if (remotePre == null && currentPre != null) return true
+        if (remotePre != null && currentPre == null) return false
+        if (remotePre != null && currentPre != null) {
+            val rPreNums = remotePre.split(".").mapNotNull { it.toIntOrNull() }
+            val cPreNums = currentPre.split(".").mapNotNull { it.toIntOrNull() }
+            val preMaxLen = maxOf(rPreNums.size, cPreNums.size)
+            for (i in 0 until preMaxLen) {
+                val r = rPreNums.getOrElse(i) { 0 }
+                val c = cPreNums.getOrElse(i) { 0 }
+                if (r > c) return true
+                if (r < c) return false
+            }
+        }
+
         return false
     }
 }
