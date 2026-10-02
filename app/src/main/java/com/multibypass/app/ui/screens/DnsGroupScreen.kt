@@ -85,7 +85,7 @@ fun DnsGroupScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Запросы шифруются через DoH. Если провайдер блокирует DoH, MultiBypass автоматически переключается на стандартный DNS этого же сервиса.",
+                            text = "Запросы шифруются через DoH. При недоступности DoH-канала или сетевых сбоях MultiBypass автоматически переключается на стандартный DNS этого же сервиса.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )

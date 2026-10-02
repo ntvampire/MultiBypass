@@ -204,7 +204,7 @@ fun MainScreen(
                         Icon(Icons.Default.Apps, contentDescription = null, tint = GreenPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Приложения для обхода",
+                            text = "Приложения для маршрутизации",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -305,7 +305,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов для разблокировки: ${dnsConfig.domains.size}",
+                        text = "Адресов в правилах: ${dnsConfig.domains.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -333,7 +333,7 @@ fun MainScreen(
                             Icon(Icons.Default.Shield, contentDescription = null, tint = AccentOrange)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Группа 2: Анти-DPI (ByeByeDPI)",
+                                text = "Группа 2: Десинхронизация TCP",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -352,7 +352,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов для разблокировки: ${antiDpiConfig.domains.size}",
+                        text = "Адресов в правилах: ${antiDpiConfig.domains.size}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -423,7 +423,7 @@ fun MainScreen(
 
     if (showAppPicker) {
         AppPickerBottomSheet(
-            title = "Приложения для обхода",
+            title = "Приложения для маршрутизации",
             selectedPackages = routedApps,
             onDismiss = { showAppPicker = false },
             onSave = { updated ->

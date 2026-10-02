@@ -75,7 +75,7 @@ fun AutoStrategyScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Тестирование обхода блокировок",
+                        text = "Тестирование сетевых стратегий",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

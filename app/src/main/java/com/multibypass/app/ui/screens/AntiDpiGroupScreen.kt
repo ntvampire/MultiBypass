@@ -111,7 +111,7 @@ fun AntiDpiGroupScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "💡 Автоподбор поочередно проверяет стратегии на YouTube, Instagram и X (Twitter) для поиска лучшего обхода.",
+                        text = "💡 Автоподбор поочередно тестирует параметры десинхронизации на YouTube, Instagram и X (Twitter) для поиска оптимального соединения.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
