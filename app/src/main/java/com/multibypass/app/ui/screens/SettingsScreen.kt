@@ -140,44 +140,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Контроль служб (Watchdog)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "Фоновый контроль активности сокетов и мягкий перезапуск служб при смене сетей без расхода батареи",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = GreenPrimary.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "Включено",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = GreenPrimary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Divider(color = DarkBackground, thickness = 1.dp)
-                        Spacer(modifier = Modifier.height(12.dp))
-
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 "Работа в фоне без ограничений",

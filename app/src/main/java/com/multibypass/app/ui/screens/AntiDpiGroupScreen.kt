@@ -48,7 +48,7 @@ fun AntiDpiGroupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Группа 2: Анти-DPI", fontWeight = FontWeight.Bold) },
+                title = { Text("Десинхронизация TCP", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")

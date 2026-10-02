@@ -40,7 +40,7 @@ fun DnsGroupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Группа 1: Свой DNS", fontWeight = FontWeight.Bold) },
+                title = { Text("Свой DNS", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")

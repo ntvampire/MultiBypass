@@ -272,7 +272,7 @@ fun MainScreen(
                             Icon(Icons.Default.Dns, contentDescription = null, tint = AccentBlue)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Группа 1: Свой DNS",
+                                text = "Свой DNS",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -319,7 +319,7 @@ fun MainScreen(
                             Icon(Icons.Default.Shield, contentDescription = null, tint = AccentOrange)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Группа 2: Десинхронизация TCP",
+                                text = "Десинхронизация TCP",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
