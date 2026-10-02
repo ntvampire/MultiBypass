@@ -83,20 +83,6 @@ fun MainScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = AccentOrange.copy(alpha = 0.2f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange)
-                        ) {
-                            Text(
-                                text = "BETA",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = AccentOrange,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
                     }
                 },
                 actions = {

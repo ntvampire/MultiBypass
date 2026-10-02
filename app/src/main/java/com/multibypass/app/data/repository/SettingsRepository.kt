@@ -22,6 +22,8 @@ class SettingsRepository(context: Context) {
         private const val KEY_WATCHDOG_ENABLED = "key_watchdog_enabled"
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
+        private const val KEY_DOMAINS_VERSION = "key_domains_version"
+        private const val CURRENT_DOMAINS_VERSION = 2
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -48,7 +50,7 @@ class SettingsRepository(context: Context) {
     private val _bootAutoStart = MutableStateFlow(prefs.getBoolean(KEY_BOOT_AUTOSTART, false))
     val bootAutoStart: StateFlow<Boolean> = _bootAutoStart.asStateFlow()
 
-    private val _watchdogEnabled = MutableStateFlow(prefs.getBoolean(KEY_WATCHDOG_ENABLED, true))
+    private val _watchdogEnabled = MutableStateFlow(true)
     val watchdogEnabled: StateFlow<Boolean> = _watchdogEnabled.asStateFlow()
 
     private val _routedApps = MutableStateFlow(loadRoutedApps())
@@ -56,6 +58,29 @@ class SettingsRepository(context: Context) {
 
     private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
+
+    init {
+        // Enforce watchdog always enabled
+        prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
+
+        // Force-upgrade default domains if coming from older versions
+        val domainVer = prefs.getInt(KEY_DOMAINS_VERSION, 0)
+        if (domainVer < CURRENT_DOMAINS_VERSION) {
+            val defaultDns = DnsGroupConfig()
+            val currentDns = _dnsConfig.value
+            val mergedDnsDomains = (defaultDns.domains + currentDns.domains).distinct()
+            val newDns = currentDns.copy(domains = mergedDnsDomains)
+            updateDnsConfig(newDns)
+
+            val defaultAntiDpi = AntiDpiGroupConfig()
+            val currentAntiDpi = _antiDpiConfig.value
+            val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
+            val newAntiDpi = currentAntiDpi.copy(domains = mergedAntiDpiDomains)
+            updateAntiDpiConfig(newAntiDpi)
+
+            prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()
+        }
+    }
 
     fun updateRoutedApps(apps: List<String>) {
         _routedApps.value = apps
@@ -95,8 +120,8 @@ class SettingsRepository(context: Context) {
     }
 
     fun setWatchdogEnabled(enabled: Boolean) {
-        _watchdogEnabled.value = enabled
-        prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, enabled).apply()
+        _watchdogEnabled.value = true
+        prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
     }
 
     private fun loadRoutedApps(): List<String> {

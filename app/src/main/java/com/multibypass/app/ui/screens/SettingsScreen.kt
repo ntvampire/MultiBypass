@@ -43,7 +43,6 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
-    val watchdogEnabled by repository.watchdogEnabled.collectAsState()
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
 
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
@@ -159,10 +158,19 @@ fun SettingsScreen(
                                 color = TextSecondary
                             )
                         }
-                        Switch(
-                            checked = watchdogEnabled,
-                            onCheckedChange = { repository.setWatchdogEnabled(it) }
-                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = GreenPrimary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Включено",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = GreenPrimary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
