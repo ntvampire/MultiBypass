@@ -23,7 +23,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 2
+        private const val CURRENT_DOMAINS_VERSION = 3
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -63,7 +63,7 @@ class SettingsRepository(context: Context) {
         // Enforce watchdog always enabled
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
 
-        // Force-upgrade default domains if coming from older versions
+        // Force-upgrade default domains & default strategy if coming from older versions
         val domainVer = prefs.getInt(KEY_DOMAINS_VERSION, 0)
         if (domainVer < CURRENT_DOMAINS_VERSION) {
             val defaultDns = DnsGroupConfig()
@@ -75,7 +75,15 @@ class SettingsRepository(context: Context) {
             val defaultAntiDpi = AntiDpiGroupConfig()
             val currentAntiDpi = _antiDpiConfig.value
             val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
-            val newAntiDpi = currentAntiDpi.copy(domains = mergedAntiDpiDomains)
+            val newStrategy = if (currentAntiDpi.strategy == "-f -1 -e 1 -q 1" || currentAntiDpi.strategy.isBlank()) {
+                "-o1 -r-5+se -a1"
+            } else {
+                currentAntiDpi.strategy
+            }
+            val newAntiDpi = currentAntiDpi.copy(
+                domains = mergedAntiDpiDomains,
+                strategy = newStrategy
+            )
             updateAntiDpiConfig(newAntiDpi)
 
             prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()

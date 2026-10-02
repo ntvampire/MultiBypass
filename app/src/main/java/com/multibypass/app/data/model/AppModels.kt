@@ -77,7 +77,7 @@ data class DnsGroupConfig(
 }
 
 data class AntiDpiGroupConfig(
-    val strategy: String = "-f -1 -e 1 -q 1",
+    val strategy: String = "-o1 -r-5+se -a1",
     val domains: List<String> = listOf(
         "youtube.com",
         "youtu.be",

@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 
 object PresetStrategies {
     val defaultList = listOf(
+        "-o1 -r-5+se -a1",
         "-f -1 -e 1 -q 1",
         "-d7 -s2 -a1",
         "-d1 -s3+s -a1",

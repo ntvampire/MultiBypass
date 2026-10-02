@@ -19,7 +19,7 @@ object ByeDpiController {
     private val lock = Mutex()
     private var proxyJob: Job? = null
 
-    suspend fun start(strategy: String = "-f -1 -e 1 -q 1", port: Int = DEFAULT_PORT) {
+    suspend fun start(strategy: String = "-o1 -r-5+se -a1", port: Int = DEFAULT_PORT) {
         lock.withLock {
             stopLocked()
             delay(150)
