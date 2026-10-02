@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 
 class LocalDohServer(
     private val port: Int = 5353,
-    private val dohUrl: String = "https://dns.comss.one/dns-query"
+    private val dohUrl: String = "https://dns.comss.one/dns-query",
+    private val fallbackStandardIp: String = "92.223.109.31"
 ) {
     companion object {
         private const val TAG = "LocalDohServer"
@@ -23,11 +24,7 @@ class LocalDohServer(
         private val DNS_MESSAGE_MEDIA_TYPE = "application/dns-message".toMediaType()
 
         private val BOOTSTRAP_HOSTS = mapOf(
-            "dns.comss.one" to listOf("92.223.109.31"),
-            "dns.google" to listOf("8.8.8.8", "8.8.4.4"),
-            "dns.quad9.net" to listOf("9.9.9.9", "149.112.112.11"),
-            "dns.adguard-dns.com" to listOf("94.140.14.14", "94.140.15.15"),
-            "common.dot.dns.yandex.net" to listOf("77.88.8.8"),
+            "dns.comss.one" to listOf("92.223.109.31", "94.130.180.225"),
             "dns.nextdns.io" to listOf("45.90.28.0", "45.90.30.0")
         )
     }
@@ -67,7 +64,7 @@ class LocalDohServer(
                     reuseAddress = true
                 }
                 socket = s
-                Log.i(TAG, "Local DoH Server started on 127.0.0.1:$port forwarding to $dohUrl")
+                Log.i(TAG, "Local DoH Server started on 127.0.0.1:$port forwarding to $dohUrl (fallback: $fallbackStandardIp:53)")
 
                 val buffer = ByteArray(BUFFER_SIZE)
 
@@ -121,6 +118,8 @@ class LocalDohServer(
             } catch (_: Exception) {}
         }
 
+        var handled = false
+
         try {
             val request = Request.Builder()
                 .url(dohUrl)
@@ -136,13 +135,57 @@ class LocalDohServer(
                         cache[queryHash] = Pair(now, body)
                         val respPacket = DatagramPacket(body, body.size, clientAddress, clientPort)
                         s.send(respPacket)
+                        handled = true
                     }
                 } else {
-                    Log.w(TAG, "DoH server error: HTTP ${response.code}")
+                    Log.w(TAG, "DoH server returned HTTP ${response.code}")
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "DoH query error: ${e.message}")
+        }
+
+        // Automatic fallback to Standard UDP DNS (port 53) if DoH was blocked, timed out or failed
+        if (!handled && fallbackStandardIp.isNotBlank()) {
+            try {
+                val fallbackResp = queryStandardDns(queryBytes, fallbackStandardIp)
+                if (fallbackResp != null && fallbackResp.size >= 12) {
+                    cache[queryHash] = Pair(now, fallbackResp)
+                    val respPacket = DatagramPacket(fallbackResp, fallbackResp.size, clientAddress, clientPort)
+                    s.send(respPacket)
+                    Log.d(TAG, "Resolved query via Standard DNS fallback ($fallbackStandardIp:53)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Standard DNS fallback error: ${e.message}")
+            }
+        }
+    }
+
+    private fun queryStandardDns(
+        queryBytes: ByteArray,
+        serverIp: String,
+        timeoutMs: Int = 3000
+    ): ByteArray? {
+        var clientSocket: DatagramSocket? = null
+        return try {
+            clientSocket = DatagramSocket().apply {
+                soTimeout = timeoutMs
+            }
+            val serverAddr = InetAddress.getByName(serverIp)
+            val sendPacket = DatagramPacket(queryBytes, queryBytes.size, serverAddr, 53)
+            clientSocket.send(sendPacket)
+
+            val buf = ByteArray(BUFFER_SIZE)
+            val recvPacket = DatagramPacket(buf, buf.size)
+            clientSocket.receive(recvPacket)
+            recvPacket.data.copyOfRange(recvPacket.offset, recvPacket.offset + recvPacket.length)
+        } catch (e: Exception) {
+            Log.w(TAG, "Standard DNS fallback UDP failed to $serverIp:53: ${e.message}")
+            null
+        } finally {
+            try {
+                clientSocket?.close()
+            } catch (_: Exception) {}
         }
     }
 

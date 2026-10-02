@@ -17,8 +17,11 @@ class SettingsRepository(context: Context) {
         private const val KEY_DNS_CONFIG = "key_dns_config"
         private const val KEY_ANTIDPI_CONFIG = "key_antidpi_config"
         private const val KEY_TG_CONFIG = "key_tg_config"
+        private const val KEY_TG_SECRET = "key_tg_secret"
         private const val KEY_BOOT_AUTOSTART = "key_boot_autostart"
         private const val KEY_WATCHDOG_ENABLED = "key_watchdog_enabled"
+        private const val KEY_ROUTED_APPS = "key_routed_apps"
+        private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -48,6 +51,26 @@ class SettingsRepository(context: Context) {
     private val _watchdogEnabled = MutableStateFlow(prefs.getBoolean(KEY_WATCHDOG_ENABLED, true))
     val watchdogEnabled: StateFlow<Boolean> = _watchdogEnabled.asStateFlow()
 
+    private val _routedApps = MutableStateFlow(loadRoutedApps())
+    val routedApps: StateFlow<List<String>> = _routedApps.asStateFlow()
+
+    private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
+    val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
+
+    fun updateRoutedApps(apps: List<String>) {
+        _routedApps.value = apps
+        prefs.edit().putString(KEY_ROUTED_APPS, gson.toJson(apps)).apply()
+        _dnsConfig.value = _dnsConfig.value.copy(appPackages = apps)
+        prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(_dnsConfig.value)).apply()
+        _antiDpiConfig.value = _antiDpiConfig.value.copy(appPackages = apps)
+        prefs.edit().putString(KEY_ANTIDPI_CONFIG, gson.toJson(_antiDpiConfig.value)).apply()
+    }
+
+    fun setRouteAllApps(enabled: Boolean) {
+        _routeAllApps.value = enabled
+        prefs.edit().putBoolean(KEY_ROUTE_ALL_APPS, enabled).apply()
+    }
+
     fun updateDnsConfig(config: DnsGroupConfig) {
         _dnsConfig.value = config
         prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(config)).apply()
@@ -60,7 +83,10 @@ class SettingsRepository(context: Context) {
 
     fun updateTgConfig(config: TelegramProxyConfig) {
         _tgConfig.value = config
-        prefs.edit().putString(KEY_TG_CONFIG, gson.toJson(config)).apply()
+        prefs.edit()
+            .putString(KEY_TG_CONFIG, gson.toJson(config))
+            .putString(KEY_TG_SECRET, config.secret)
+            .apply()
     }
 
     fun setBootAutoStart(enabled: Boolean) {
@@ -71,6 +97,19 @@ class SettingsRepository(context: Context) {
     fun setWatchdogEnabled(enabled: Boolean) {
         _watchdogEnabled.value = enabled
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, enabled).apply()
+    }
+
+    private fun loadRoutedApps(): List<String> {
+        val json = prefs.getString(KEY_ROUTED_APPS, null)
+        if (json != null) {
+            return try {
+                val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
+                gson.fromJson(json, type) ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        return (loadDnsConfig().appPackages + loadAntiDpiConfig().appPackages).distinct()
     }
 
     private fun loadDnsConfig(): DnsGroupConfig {
@@ -92,28 +131,38 @@ class SettingsRepository(context: Context) {
     }
 
     private fun loadTgConfig(): TelegramProxyConfig {
+        val savedSecret = prefs.getString(KEY_TG_SECRET, null)
         val json = prefs.getString(KEY_TG_CONFIG, null)
-        val config = if (json != null) {
+        var config: TelegramProxyConfig? = null
+
+        if (json != null) {
             try {
-                gson.fromJson(json, TelegramProxyConfig::class.java) ?: TelegramProxyConfig(secret = generateRandomHexSecret())
-            } catch (_: Exception) {
-                TelegramProxyConfig(secret = generateRandomHexSecret())
-            }
-        } else {
-            TelegramProxyConfig(secret = generateRandomHexSecret())
+                config = gson.fromJson(json, TelegramProxyConfig::class.java)
+            } catch (_: Exception) {}
         }
 
-        val isSecretValid = config.secret.length == 32 &&
-                config.secret.all { it in "0123456789abcdefABCDEF" } &&
-                config.secret != "00000000000000000000000000000000"
+        val secretCandidate = config?.secret ?: savedSecret
+        val isCandidateValid = secretCandidate != null &&
+                secretCandidate.length == 32 &&
+                secretCandidate.all { it in "0123456789abcdefABCDEF" } &&
+                secretCandidate != "00000000000000000000000000000000"
 
-        return if (!isSecretValid) {
-            val updated = config.copy(secret = generateRandomHexSecret())
-            prefs.edit().putString(KEY_TG_CONFIG, gson.toJson(updated)).apply()
-            updated
+        val finalSecret = if (isCandidateValid && secretCandidate != null) {
+            secretCandidate
         } else {
-            config
+            generateRandomHexSecret()
         }
+
+        val finalConfig = (config ?: TelegramProxyConfig()).copy(secret = finalSecret)
+
+        if (json == null || savedSecret == null || !isCandidateValid) {
+            prefs.edit()
+                .putString(KEY_TG_CONFIG, gson.toJson(finalConfig))
+                .putString(KEY_TG_SECRET, finalSecret)
+                .apply()
+        }
+
+        return finalConfig
     }
 
     private fun generateRandomHexSecret(): String {

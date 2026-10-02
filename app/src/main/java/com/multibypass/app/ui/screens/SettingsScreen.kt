@@ -27,6 +27,7 @@ import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.core.updater.UpdateInfo
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.theme.*
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +35,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
+    BackHandler(onBack = onNavigateBack)
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { SettingsRepository.getInstance(context) }
@@ -323,9 +326,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showUpdateDialog = false
-                        scope.launch {
-                            AppUpdateManager.downloadAndInstallApk(context, updateInfo!!.downloadUrl)
-                        }
+                        AppUpdateManager.downloadAndInstallApk(context, updateInfo!!.downloadUrl)
                     }
                 ) {
                     Text("Скачать и установить")

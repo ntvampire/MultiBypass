@@ -74,4 +74,4 @@ jobs:
           body_path: release_notes.md
           files: release-apks/*.apk
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, 'beta') }}

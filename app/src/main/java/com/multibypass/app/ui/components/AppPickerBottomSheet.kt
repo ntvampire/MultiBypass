@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -27,6 +28,24 @@ data class InstalledAppItem(
     val name: String,
     val packageName: String,
     val isSystem: Boolean
+)
+
+val POPULAR_PACKAGES = setOf(
+    "com.google.android.youtube",
+    "app.revanced.android.youtube",
+    "com.vanced.android.youtube",
+    "com.instagram.android",
+    "com.discord",
+    "org.telegram.messenger",
+    "org.telegram.messenger.web",
+    "org.telegram.plus",
+    "com.openai.chatgpt",
+    "com.twitter.android",
+    "com.android.chrome",
+    "com.spotify.music",
+    "com.zhiliaoapp.musically",
+    "com.facebook.katana",
+    "com.facebook.orca"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,7 +137,43 @@ fun AppPickerBottomSheet(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Quick Selection Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val popularInstalled = appList
+                            .filter { POPULAR_PACKAGES.contains(it.packageName) }
+                            .map { it.packageName }
+                        for (pkg in popularInstalled) {
+                            if (!currentSelected.contains(pkg)) {
+                                currentSelected.add(pkg)
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Выбрать популярные", maxLines = 1)
+                }
+
+                if (currentSelected.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = { currentSelected.clear() },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Снять все")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -7,6 +7,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -54,6 +55,15 @@ class MainActivity : ComponentActivity() {
                     color = DarkBackground
                 ) {
                     var currentScreen by remember { mutableStateOf(Screen.MAIN) }
+
+                    if (currentScreen != Screen.MAIN) {
+                        BackHandler {
+                            currentScreen = when (currentScreen) {
+                                Screen.AUTO_STRATEGY -> Screen.ANTIDPI_GROUP
+                                else -> Screen.MAIN
+                            }
+                        }
+                    }
 
                     Crossfade(targetState = currentScreen, label = "screen_transition") { screen ->
                         when (screen) {
