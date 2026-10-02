@@ -18,14 +18,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 enum class ServiceStatus {
@@ -61,13 +65,18 @@ fun ServiceHealthWidget(
         )
     }
 
-    val httpClient = remember {
-        OkHttpClient.Builder()
-            .connectTimeout(3500, TimeUnit.MILLISECONDS)
-            .readTimeout(3500, TimeUnit.MILLISECONDS)
+    val httpClient = remember(isVpnConnected) {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(4000, TimeUnit.MILLISECONDS)
+            .readTimeout(4000, TimeUnit.MILLISECONDS)
             .followRedirects(true)
-            .retryOnConnectionFailure(false)
-            .build()
+            .retryOnConnectionFailure(true)
+
+        if (isVpnConnected) {
+            builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", ByeDpiController.DEFAULT_PORT)))
+        }
+
+        builder.build()
     }
 
     fun runHealthCheck() {
@@ -87,7 +96,8 @@ fun ServiceHealthWidget(
                     val req = Request.Builder()
                         .url(item.url)
                         .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
-                        .head()
+                        .header("Accept", "*/*")
+                        .get()
                         .build()
 
                     val (newStatus, latency) = try {
@@ -116,6 +126,7 @@ fun ServiceHealthWidget(
     // Auto check when VPN connects
     LaunchedEffect(isVpnConnected) {
         if (isVpnConnected) {
+            delay(600)
             runHealthCheck()
         } else {
             for (i in services.indices) {
