@@ -2,6 +2,14 @@
 
 <div align="center">
   <h3>Сетевая утилита раздельной маршрутизации, тестирования устойчивости соединений и анализа транспортных протоколов для Android 9+</h3>
+
+  <p>
+    <a href="https://github.com/ntvampire/MultiBypass"><img src="https://img.shields.io/badge/%D0%A1%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%90%D0%BA%D1%82%D0%B8%D0%B2%D0%B5%D0%BD-brightgreen?style=flat-square" alt="Статус: Активен" /></a>
+    <a href="https://github.com/ntvampire/MultiBypass/releases/latest"><img src="https://img.shields.io/github/v/release/ntvampire/MultiBypass?style=flat-square&color=007acc&label=%D0%A0%D0%B5%D0%BB%D0%B8%D0%B7" alt="Последний релиз" /></a>
+    <a href="https://github.com/ntvampire/MultiBypass/actions"><img src="https://img.shields.io/github/actions/workflow/status/ntvampire/MultiBypass/release.yml?style=flat-square&label=%D0%A1%D0%B1%D0%BE%D1%80%D0%BA%D0%B0" alt="Статус сборки" /></a>
+    <img src="https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-Android%209%2B-green?style=flat-square&logo=android" alt="Платформа: Android 9+" />
+    <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-blue?style=flat-square" alt="Лицензия: MIT" /></a>
+  </p>
 </div>
 
 ---
