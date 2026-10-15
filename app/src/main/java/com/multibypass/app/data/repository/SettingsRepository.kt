@@ -155,7 +155,7 @@ class SettingsRepository(private val context: Context) {
             val installed = pm.getInstalledApplications(0)
                 .map { it.packageName }
                 .toSet()
-            val detected = com.multibypass.app.ui.components.POPULAR_PACKAGES.filter { installed.contains(it) }
+            val detected = com.multibypass.app.data.model.POPULAR_PACKAGES.filter { installed.contains(it) }
             if (detected.isNotEmpty()) {
                 prefs.edit().putString(KEY_ROUTED_APPS, gson.toJson(detected)).apply()
             }

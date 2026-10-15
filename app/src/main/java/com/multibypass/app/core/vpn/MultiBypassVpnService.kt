@@ -22,6 +22,8 @@ import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
 import io.github.romanvht.byedpi.core.TProxyService
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

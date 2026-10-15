@@ -49,7 +49,18 @@ class VpnTileService : TileService() {
                 val intent = Intent(this, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-                startActivityAndCollapse(intent)
+                if (Build.VERSION.SDK_INT >= 34) {
+                    val pi = android.app.PendingIntent.getActivity(
+                        this,
+                        0,
+                        intent,
+                        android.app.PendingIntent.FLAG_IMMUTABLE
+                    )
+                    startActivityAndCollapse(pi)
+                } else {
+                    @Suppress("DEPRECATION")
+                    startActivityAndCollapse(intent)
+                }
             }
         }
     }

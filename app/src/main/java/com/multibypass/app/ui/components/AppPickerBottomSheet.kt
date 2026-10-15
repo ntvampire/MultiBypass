@@ -24,28 +24,12 @@ import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import com.multibypass.app.data.model.POPULAR_PACKAGES
+
 data class InstalledAppItem(
     val name: String,
     val packageName: String,
     val isSystem: Boolean
-)
-
-val POPULAR_PACKAGES = setOf(
-    "com.google.android.youtube",
-    "app.revanced.android.youtube",
-    "com.vanced.android.youtube",
-    "com.instagram.android",
-    "com.discord",
-    "org.telegram.messenger",
-    "org.telegram.messenger.web",
-    "org.telegram.plus",
-    "com.openai.chatgpt",
-    "com.twitter.android",
-    "com.android.chrome",
-    "com.spotify.music",
-    "com.zhiliaoapp.musically",
-    "com.facebook.katana",
-    "com.facebook.orca"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
