@@ -194,12 +194,13 @@ fun AutoStrategyScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             res.workingServices.forEach { sName ->
+                                                val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
                                                     color = GreenPrimary.copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "$sName ✓",
+                                                        text = "$sName$sLat",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = GreenPrimary,
                                                         fontSize = 10.sp,

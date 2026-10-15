@@ -191,8 +191,16 @@ Java_io_github_romanvht_byedpi_core_ByeDpiProxy_jniForceClose(__attribute__((unu
     return 0;
 }
 
+extern int g_block_quic;
+
 JNIEXPORT void JNICALL
 Java_io_github_romanvht_byedpi_core_ByeDpiProxy_setDnsRedirectPort(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz, jint port) {
     g_dns_redirect_port = port;
     LOG(LOG_S, "DNS redirect port set to %d", port);
+}
+
+JNIEXPORT void JNICALL
+Java_io_github_romanvht_byedpi_core_ByeDpiProxy_setBlockQuic(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz, jboolean block) {
+    g_block_quic = block ? 1 : 0;
+    LOG(LOG_S, "QUIC blocking set to %d", g_block_quic);
 }

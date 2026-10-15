@@ -22,6 +22,8 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_WATCHDOG_ENABLED = "key_watchdog_enabled"
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
+        private const val KEY_BYPASS_LAN = "key_bypass_lan"
+        private const val KEY_DOMAINS_LAST_SYNC = "key_domains_last_sync"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
         private const val CURRENT_DOMAINS_VERSION = 4
 
@@ -59,32 +61,47 @@ class SettingsRepository(private val context: Context) {
     private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
 
+    private val _bypassLan = MutableStateFlow(prefs.getBoolean(KEY_BYPASS_LAN, true))
+    val bypassLan: StateFlow<Boolean> = _bypassLan.asStateFlow()
+
     init {
         // Enforce watchdog always enabled
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
 
+        // Populate domains from assets if empty
+        if (_dnsConfig.value.domains.isEmpty()) {
+            val assetsDns = loadDefaultDomainsFromAssets("domains_dns.txt")
+            if (assetsDns.isNotEmpty()) {
+                updateDnsConfig(_dnsConfig.value.copy(domains = assetsDns))
+            }
+        }
+        if (_antiDpiConfig.value.domains.isEmpty()) {
+            val assetsAntiDpi = loadDefaultDomainsFromAssets("domains_antidpi.txt")
+            if (assetsAntiDpi.isNotEmpty()) {
+                updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = assetsAntiDpi))
+            }
+        }
+
         // Force-upgrade default domains & default strategy if coming from older versions
         val domainVer = prefs.getInt(KEY_DOMAINS_VERSION, 0)
         if (domainVer < CURRENT_DOMAINS_VERSION) {
-            val defaultDns = DnsGroupConfig()
+            val assetsDns = loadDefaultDomainsFromAssets("domains_dns.txt")
             val currentDns = _dnsConfig.value
-            val mergedDnsDomains = (defaultDns.domains + currentDns.domains).distinct()
-            val newDns = currentDns.copy(domains = mergedDnsDomains)
-            updateDnsConfig(newDns)
+            val mergedDnsDomains = (assetsDns + currentDns.domains).distinct()
+            updateDnsConfig(currentDns.copy(domains = mergedDnsDomains))
 
-            val defaultAntiDpi = AntiDpiGroupConfig()
+            val assetsAntiDpi = loadDefaultDomainsFromAssets("domains_antidpi.txt")
             val currentAntiDpi = _antiDpiConfig.value
-            val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
+            val mergedAntiDpiDomains = (assetsAntiDpi + currentAntiDpi.domains).distinct()
             val newStrategy = if (currentAntiDpi.strategy == "-f -1 -e 1 -q 1" || currentAntiDpi.strategy.isBlank()) {
                 "-o1 -r-5+se -a1"
             } else {
                 currentAntiDpi.strategy
             }
-            val newAntiDpi = currentAntiDpi.copy(
+            updateAntiDpiConfig(currentAntiDpi.copy(
                 domains = mergedAntiDpiDomains,
                 strategy = newStrategy
-            )
-            updateAntiDpiConfig(newAntiDpi)
+            ))
 
             prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()
         }
@@ -165,21 +182,111 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    fun setBypassLan(enabled: Boolean) {
+        _bypassLan.value = enabled
+        prefs.edit().putBoolean(KEY_BYPASS_LAN, enabled).apply()
+    }
+
+    fun getLastDomainSyncTime(): Long {
+        return prefs.getLong(KEY_DOMAINS_LAST_SYNC, 0L)
+    }
+
     private fun loadDnsConfig(): DnsGroupConfig {
-        val json = prefs.getString(KEY_DNS_CONFIG, null) ?: return DnsGroupConfig()
-        return try {
-            gson.fromJson(json, DnsGroupConfig::class.java) ?: DnsGroupConfig()
-        } catch (_: Exception) {
+        val json = prefs.getString(KEY_DNS_CONFIG, null)
+        val loaded = if (json != null) {
+            try {
+                gson.fromJson(json, DnsGroupConfig::class.java) ?: DnsGroupConfig()
+            } catch (_: Exception) {
+                DnsGroupConfig()
+            }
+        } else {
             DnsGroupConfig()
+        }
+        return if (loaded.domains.isEmpty()) {
+            loaded.copy(domains = loadDefaultDomainsFromAssets("domains_dns.txt"))
+        } else {
+            loaded
         }
     }
 
     private fun loadAntiDpiConfig(): AntiDpiGroupConfig {
-        val json = prefs.getString(KEY_ANTIDPI_CONFIG, null) ?: return AntiDpiGroupConfig()
-        return try {
-            gson.fromJson(json, AntiDpiGroupConfig::class.java) ?: AntiDpiGroupConfig()
-        } catch (_: Exception) {
+        val json = prefs.getString(KEY_ANTIDPI_CONFIG, null)
+        val loaded = if (json != null) {
+            try {
+                gson.fromJson(json, AntiDpiGroupConfig::class.java) ?: AntiDpiGroupConfig()
+            } catch (_: Exception) {
+                AntiDpiGroupConfig()
+            }
+        } else {
             AntiDpiGroupConfig()
+        }
+        return if (loaded.domains.isEmpty()) {
+            loaded.copy(domains = loadDefaultDomainsFromAssets("domains_antidpi.txt"))
+        } else {
+            loaded
+        }
+    }
+
+    fun loadDefaultDomainsFromAssets(assetName: String): List<String> {
+        return try {
+            context.assets.open(assetName).bufferedReader().useLines { lines ->
+                lines.map { it.trim() }
+                    .filter { it.isNotBlank() && !it.startsWith("#") }
+                    .distinct()
+                    .toList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun syncDomainListsFromWeb(): Result<Pair<Int, Int>> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val client = okhttp3.OkHttpClient.Builder()
+                .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+
+            val dnsUrl = "https://ntvampire.github.io/MultiBypass/domains_dns.txt"
+            val antiDpiUrl = "https://ntvampire.github.io/MultiBypass/domains_antidpi.txt"
+
+            val dnsReq = okhttp3.Request.Builder().url(dnsUrl).build()
+            val antiDpiReq = okhttp3.Request.Builder().url(antiDpiUrl).build()
+
+            val dnsBody = client.newCall(dnsReq).execute().use { resp ->
+                if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code} for $dnsUrl")
+                resp.body?.string() ?: ""
+            }
+
+            val antiDpiBody = client.newCall(antiDpiReq).execute().use { resp ->
+                if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code} for $antiDpiUrl")
+                resp.body?.string() ?: ""
+            }
+
+            val parsedDns = dnsBody.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+                .distinct()
+
+            val parsedAntiDpi = antiDpiBody.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+                .distinct()
+
+            if (parsedDns.isNotEmpty()) {
+                val merged = (parsedDns + _dnsConfig.value.domains).distinct()
+                updateDnsConfig(_dnsConfig.value.copy(domains = merged))
+            }
+            if (parsedAntiDpi.isNotEmpty()) {
+                val merged = (parsedAntiDpi + _antiDpiConfig.value.domains).distinct()
+                updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = merged))
+            }
+
+            prefs.edit().putLong(KEY_DOMAINS_LAST_SYNC, System.currentTimeMillis()).apply()
+
+            Result.success(Pair(parsedDns.size, parsedAntiDpi.size))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

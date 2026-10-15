@@ -23,10 +23,26 @@ class LocalDohServer(
         private const val BUFFER_SIZE = 4096
         private val DNS_MESSAGE_MEDIA_TYPE = "application/dns-message".toMediaType()
 
-        private val BOOTSTRAP_HOSTS = mapOf(
+        private val DEFAULT_BOOTSTRAP_HOSTS = mapOf(
             "dns.comss.one" to listOf("92.223.109.31", "94.130.180.225"),
+            "geohide.ru" to listOf("193.233.112.67"),
+            "dns.bezmezhau.com" to listOf("143.20.64.55"),
             "dns.nextdns.io" to listOf("45.90.28.0", "45.90.30.0")
         )
+    }
+
+    private val effectiveBootstrapHosts: Map<String, List<String>> by lazy {
+        val map = DEFAULT_BOOTSTRAP_HOSTS.toMutableMap()
+        try {
+            val host = java.net.URI(dohUrl).host
+            if (!host.isNullOrBlank() && fallbackStandardIp.isNotBlank()) {
+                val current = map[host] ?: emptyList()
+                if (!current.contains(fallbackStandardIp)) {
+                    map[host] = listOf(fallbackStandardIp) + current
+                }
+            }
+        } catch (_: Exception) {}
+        map
     }
 
     private var socket: DatagramSocket? = null
@@ -40,14 +56,18 @@ class LocalDohServer(
         .retryOnConnectionFailure(true)
         .dns(object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
-                val ips = BOOTSTRAP_HOSTS[hostname]
-                if (ips != null) {
+                val ips = effectiveBootstrapHosts[hostname]
+                if (!ips.isNullOrEmpty()) {
                     return ips.map { InetAddress.getByName(it) }
                 }
                 return try {
                     Dns.SYSTEM.lookup(hostname)
                 } catch (e: Exception) {
-                    listOf(InetAddress.getByName("92.223.109.31"))
+                    if (fallbackStandardIp.isNotBlank()) {
+                        listOf(InetAddress.getByName(fallbackStandardIp))
+                    } else {
+                        listOf(InetAddress.getByName("92.223.109.31"))
+                    }
                 }
             }
         })
@@ -103,6 +123,20 @@ class LocalDohServer(
         s: DatagramSocket
     ) {
         if (queryBytes.size < 12) return
+
+        // IPv6 Leak Protection: Block AAAA records at local DNS level
+        // Returns instant NOERROR with 0 answers (NODATA), forcing apps to use pure IPv4 without lag
+        if (isAaaaQuery(queryBytes)) {
+            val qEnd = getQuestionEndOffset(queryBytes)
+            if (qEnd > 12) {
+                try {
+                    val emptyResp = createEmptyDnsResponse(queryBytes, qEnd)
+                    val respPacket = DatagramPacket(emptyResp, emptyResp.size, clientAddress, clientPort)
+                    s.send(respPacket)
+                    return
+                } catch (_: Exception) {}
+            }
+        }
 
         val queryHash = queryBytes.drop(2).toByteArray().contentHashCode().toString()
         val now = System.currentTimeMillis()
@@ -198,5 +232,58 @@ class LocalDohServer(
         socket = null
         cache.clear()
         Log.i(TAG, "Local DoH Server stopped")
+    }
+
+    private fun isAaaaQuery(queryBytes: ByteArray): Boolean {
+        if (queryBytes.size < 16) return false
+        var offset = 12
+        while (offset < queryBytes.size) {
+            val len = queryBytes[offset].toInt() and 0xFF
+            if (len == 0) {
+                offset += 1
+                break
+            }
+            if ((len and 0xC0) == 0xC0) {
+                offset += 2
+                break
+            }
+            offset += 1 + len
+        }
+        if (offset + 4 <= queryBytes.size) {
+            val qtype = ((queryBytes[offset].toInt() and 0xFF) shl 8) or (queryBytes[offset + 1].toInt() and 0xFF)
+            return qtype == 28
+        }
+        return false
+    }
+
+    private fun getQuestionEndOffset(queryBytes: ByteArray): Int {
+        var offset = 12
+        while (offset < queryBytes.size) {
+            val len = queryBytes[offset].toInt() and 0xFF
+            if (len == 0) {
+                offset += 1
+                break
+            }
+            if ((len and 0xC0) == 0xC0) {
+                offset += 2
+                break
+            }
+            offset += 1 + len
+        }
+        return if (offset + 4 <= queryBytes.size) offset + 4 else queryBytes.size
+    }
+
+    private fun createEmptyDnsResponse(queryBytes: ByteArray, questionEndOffset: Int): ByteArray {
+        val resp = queryBytes.copyOf(questionEndOffset)
+        val rd = queryBytes[2].toInt() and 0x01
+        resp[2] = (0x80 or rd).toByte()
+        resp[3] = 0x80.toByte()
+        resp[6] = 0
+        resp[7] = 0
+        resp[8] = 0
+        resp[9] = 0
+        resp[10] = 0
+        resp[11] = 0
+        return resp
     }
 }

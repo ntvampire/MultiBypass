@@ -29,6 +29,7 @@ import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.components.AppPickerBottomSheet
+import com.multibypass.app.ui.components.DiagnosticsDialog
 import com.multibypass.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +54,7 @@ fun MainScreen(
     val routeAllApps by repository.routeAllApps.collectAsState()
 
     var showAppPicker by remember { mutableStateOf(false) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
     val isConnected = vpnStatus == VpnStatus.CONNECTED
     val isConnecting = vpnStatus == VpnStatus.CONNECTING
@@ -86,6 +88,13 @@ fun MainScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showDiagnosticsDialog = true }) {
+                        Icon(
+                            Icons.Default.HealthAndSafety,
+                            contentDescription = "Сетевой доктор",
+                            tint = GreenPrimary
+                        )
+                    }
                     if (isConnected) {
                         IconButton(onClick = {
                             MultiBypassVpnService.reconnect(context)
@@ -426,6 +435,12 @@ fun MainScreen(
             onSave = { updated ->
                 repository.updateRoutedApps(updated)
             }
+        )
+    }
+
+    if (showDiagnosticsDialog) {
+        DiagnosticsDialog(
+            onDismissRequest = { showDiagnosticsDialog = false }
         )
     }
 }

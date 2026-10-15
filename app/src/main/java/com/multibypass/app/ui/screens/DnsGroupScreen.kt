@@ -189,7 +189,8 @@ fun DnsGroupScreen(
                 )
                 TextButton(
                     onClick = {
-                        repository.updateDnsConfig(dnsConfig.copy(domains = DnsGroupConfig().domains))
+                        val defaultDomains = repository.loadDefaultDomainsFromAssets("domains_dns.txt")
+                        repository.updateDnsConfig(dnsConfig.copy(domains = defaultDomains))
                     }
                 ) {
                     Text("Сброс")

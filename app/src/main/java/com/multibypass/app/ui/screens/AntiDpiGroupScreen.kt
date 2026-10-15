@@ -21,10 +21,7 @@ import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
-import com.multibypass.app.ui.theme.AccentOrange
-import com.multibypass.app.ui.theme.DarkBackground
-import com.multibypass.app.ui.theme.DarkSurface
-import com.multibypass.app.ui.theme.TextSecondary
+import com.multibypass.app.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,9 +106,42 @@ fun AntiDpiGroupScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = DarkSurfaceVariant)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Блокировать QUIC / HTTP/3",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Принудительно переключает YouTube и браузеры на TCP (HTTP/2), где десинхронизация работает со 100% стабильностью.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = antiDpiConfig.blockQuic,
+                            onCheckedChange = { checked ->
+                                repository.updateAntiDpiConfig(antiDpiConfig.copy(blockQuic = checked))
+                                try {
+                                    io.github.romanvht.byedpi.core.ByeDpiProxy.setBlockQuic(checked)
+                                } catch (_: Throwable) {}
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "💡 Автоподбор поочередно тестирует параметры десинхронизации на YouTube, Instagram и X (Twitter) для поиска оптимального соединения.",
+                        text = "💡 Автоподбор поочередно тестирует параметры десинхронизации на YouTube, Instagram и Facebook для поиска оптимального соединения.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -133,7 +163,8 @@ fun AntiDpiGroupScreen(
                 )
                 TextButton(
                     onClick = {
-                        repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = AntiDpiGroupConfig().domains))
+                        val defaultDomains = repository.loadDefaultDomainsFromAssets("domains_antidpi.txt")
+                        repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = defaultDomains))
                     }
                 ) {
                     Text("Сброс")

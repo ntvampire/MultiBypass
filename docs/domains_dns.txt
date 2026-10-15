@@ -1,0 +1,33 @@
+# MultiBypass - Списки доменов для группы "Свой DNS"
+# Домены сервисов, требующих умной подмены DNS (ChatGPT, Canva, Notion, Spotify, PSN, Gemini и др.)
+instagram.com
+cdninstagram.com
+i.instagram.com
+threads.net
+facebook.com
+fbcdn.net
+fb.me
+meta.com
+openai.com
+chatgpt.com
+oaistatic.com
+oaiusercontent.com
+canva.com
+notion.so
+linkedin.com
+gemini.google.com
+aistudio.google.com
+generativeai.google.com
+makersuite.google.com
+alkalimakersuite-pa.clients6.google.com
+playstation.com
+sonyentertainmentnetwork.com
+xboxlive.com
+medium.com
+soundcloud.com
+sndcdn.com
+spotify.com
+scdn.co
+spotifycdn.com
+audio-ak-spotify-com.akamaized.net
+heads4-ak-spotify-com.akamaized.net

@@ -185,7 +185,8 @@ class StrategyTester(private val context: Context) {
                 latencyMs = 9999L,
                 testedSitesCount = targets.size,
                 successfulSitesCount = 0,
-                workingServices = emptyList()
+                workingServices = emptyList(),
+                serviceLatencies = emptyMap()
             )
         }
 
@@ -195,6 +196,7 @@ class StrategyTester(private val context: Context) {
         var successCount = 0
         var totalLatency = 0L
         val workingServices = mutableListOf<String>()
+        val serviceLatencies = mutableMapOf<String, Long>()
 
         for (target in targets) {
             if (!coroutineContext.isActive) break
@@ -211,6 +213,7 @@ class StrategyTester(private val context: Context) {
                     totalLatency += lat
                     successCount++
                     workingServices.add(target.name)
+                    serviceLatencies[target.name] = lat
                 }
                 response.close()
             } catch (_: Throwable) {}
@@ -225,7 +228,8 @@ class StrategyTester(private val context: Context) {
             latencyMs = avgLatency,
             testedSitesCount = targets.size,
             successfulSitesCount = successCount,
-            workingServices = workingServices
+            workingServices = workingServices,
+            serviceLatencies = serviceLatencies
         )
     }
 

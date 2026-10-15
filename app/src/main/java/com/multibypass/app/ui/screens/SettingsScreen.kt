@@ -43,7 +43,13 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
+    val bypassLan by repository.bypassLan.collectAsState()
+    val dnsConfig by repository.dnsConfig.collectAsState()
+    val antiDpiConfig by repository.antiDpiConfig.collectAsState()
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
+
+    var isSyncingDomains by remember { mutableStateOf(false) }
+    var syncResultText by remember { mutableStateOf<String?>(null) }
 
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
     var isIgnoringBatteryOptimizations by remember {
@@ -121,6 +127,100 @@ fun SettingsScreen(
                         checked = bootAutoStart,
                         onCheckedChange = { repository.setBootAutoStart(it) }
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Bypass LAN
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Исключить локальную сеть (LAN)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Прямой доступ к роутерам, принтерам и устройствам умного дома (192.168.x.x, 10.x.x.x) мимо туннеля", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+                    Switch(
+                        checked = bypassLan,
+                        onCheckedChange = { repository.setBypassLan(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Domain Lists from GitHub Pages
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Списки доменов (GitHub Pages)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Свой DNS: ${dnsConfig.domains.size} доменов | ByeByeDPI: ${antiDpiConfig.domains.size} доменов",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    val lastSync = repository.getLastDomainSyncTime()
+                    if (lastSync > 0) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val formatted = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(lastSync))
+                        Text(
+                            text = "Последнее обновление: $formatted",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (isSyncingDomains) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    isSyncingDomains = true
+                                    val res = repository.syncDomainListsFromWeb()
+                                    isSyncingDomains = false
+                                    syncResultText = if (res.isSuccess) {
+                                        val (dnsCount, dpiCount) = res.getOrThrow()
+                                        "Успешно загружено: $dnsCount DNS, $dpiCount ByeDPI доменов"
+                                    } else {
+                                        "Ошибка обновления: ${res.exceptionOrNull()?.message ?: "Сбой соединения"}"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Обновить списки доменов")
+                        }
+                    }
+
+                    if (syncResultText != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = syncResultText!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (syncResultText!!.startsWith("Успешно")) GreenPrimary else AccentOrange
+                        )
+                    }
                 }
             }
 
