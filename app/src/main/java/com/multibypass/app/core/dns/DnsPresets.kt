@@ -12,6 +12,20 @@ object DnsPresets {
             description = "SmartDNS: ChatGPT, Claude, Copilot, Spotify, Xbox, Canva, Notion"
         ),
         DnsPreset(
+            id = "geohide",
+            name = "GeoHide DNS",
+            standardIp = "193.233.112.67",
+            dohUrl = "https://geohide.ru/dns-query",
+            description = "SmartDNS: обход гео-блокировок зарубежных сервисов и ИИ (Россия)"
+        ),
+        DnsPreset(
+            id = "bezmezhau",
+            name = "BezMezhAU DNS",
+            standardIp = "143.20.64.55",
+            dohUrl = "https://dns.bezmezhau.com/dns-query",
+            description = "SmartDNS: обход санкций и блокировок ChatGPT/Spotify/YouTube (Беларусь/РФ)"
+        ),
+        DnsPreset(
             id = "xbox",
             name = "Xbox / Microsoft DNS",
             standardIp = "185.51.200.2",

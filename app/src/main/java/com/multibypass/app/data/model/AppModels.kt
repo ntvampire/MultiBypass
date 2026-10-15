@@ -66,6 +66,8 @@ data class DnsGroupConfig(
             DnsMode.DOH -> {
                 when (presetId) {
                     "comss" -> "https://dns.comss.one/dns-query"
+                    "geohide" -> "https://geohide.ru/dns-query"
+                    "bezmezhau" -> "https://dns.bezmezhau.com/dns-query"
                     "xbox" -> "https://dns.comss.one/dns-query"
                     "dns_ai" -> "https://dns.comss.one/dns-query"
                     "nextdns" -> {
@@ -81,6 +83,8 @@ data class DnsGroupConfig(
     fun getEffectiveStandardIp(): String {
         return when (presetId) {
             "comss" -> "92.223.109.31"
+            "geohide" -> "193.233.112.67"
+            "bezmezhau" -> "143.20.64.55"
             "xbox" -> "185.51.200.2"
             "dns_ai" -> "92.223.109.31"
             "nextdns" -> "45.90.28.0"

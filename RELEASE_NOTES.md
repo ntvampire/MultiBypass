@@ -7,6 +7,10 @@
 - 🚀 **Автовыбор популярных приложений при первом старте (Zero-Config UX)**:
   - При первой установке приложение автоматически находит установленные на устройстве сервисы (YouTube, Instagram, Discord, Telegram, ChatGPT, Spotify, Facebook, Chrome) и включает их в список маршрутизации. Приложение готово к работе сразу после первого нажатия «Подключить».
 
+- 🌐 **Новые SmartDNS профили (GeoHide DNS и BezMezhAU DNS)**:
+  - Добавлен профиль **GeoHide DNS** (`https://geohide.ru/dns-query`, IP `193.233.112.67`) для стабильного доступа к ChatGPT, Canva, Notion и зарубежным сервисам из РФ.
+  - Добавлен профиль **BezMezhAU DNS** (`https://dns.bezmezhau.com/dns-query`, IP `143.20.64.55`) для доступа к ChatGPT, Spotify и YouTube без ограничений (Беларусь/РФ).
+
 - 🌐 **Расширенная база доменов по умолчанию**:
   - В группу «Свой DNS» добавлены сервисы Google Gemini & AI Studio, PlayStation Network, Xbox Live, аудио-CDN Spotify и SoundCloud.
   - В группу «Десинхронизация TCP» добавлены критические узлы Discord (Gateway & Voice), YouTube 4K стриминг (wide-youtube), Cloudflare ECH и Signal.
