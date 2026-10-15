@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class SettingsRepository(context: Context) {
+class SettingsRepository(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "multibypass_prefs"
@@ -23,7 +23,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 3
+        private const val CURRENT_DOMAINS_VERSION = 4
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -142,7 +142,27 @@ class SettingsRepository(context: Context) {
                 emptyList()
             }
         }
-        return (loadDnsConfig().appPackages + loadAntiDpiConfig().appPackages).distinct()
+        val legacy = (loadDnsConfig().appPackages + loadAntiDpiConfig().appPackages).distinct()
+        if (legacy.isNotEmpty()) {
+            return legacy
+        }
+        return autoDetectPopularApps()
+    }
+
+    private fun autoDetectPopularApps(): List<String> {
+        return try {
+            val pm = context.packageManager
+            val installed = pm.getInstalledApplications(0)
+                .map { it.packageName }
+                .toSet()
+            val detected = com.multibypass.app.ui.components.POPULAR_PACKAGES.filter { installed.contains(it) }
+            if (detected.isNotEmpty()) {
+                prefs.edit().putString(KEY_ROUTED_APPS, gson.toJson(detected)).apply()
+            }
+            detected
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     private fun loadDnsConfig(): DnsGroupConfig {

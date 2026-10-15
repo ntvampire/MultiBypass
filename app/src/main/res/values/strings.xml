@@ -7,4 +7,6 @@
     <string name="vpn_disconnected">MultiBypass остановлен</string>
     <string name="vpn_action_stop">Остановить</string>
     <string name="tg_notification_channel_name">Telegram WS Proxy</string>
+    <string name="tile_vpn_label">MultiBypass</string>
+    <string name="tile_tg_label">Telegram Proxy</string>
 </resources>
