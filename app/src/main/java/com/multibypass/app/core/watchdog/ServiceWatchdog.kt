@@ -50,10 +50,15 @@ object ServiceWatchdog {
         }
     }
 
+    private var debounceJob: Job? = null
+
     fun triggerCheck(delayMs: Long = 0L) {
-        scope.launch {
-            if (delayMs > 0) delay(delayMs)
-            checkAllServices("manual-or-event-trigger")
+        synchronized(this) {
+            debounceJob?.cancel()
+            debounceJob = scope.launch {
+                if (delayMs > 0) delay(delayMs)
+                checkAllServices("debounced-event-trigger")
+            }
         }
     }
 
@@ -134,9 +139,13 @@ object ServiceWatchdog {
         val byeDpiPort = ByeDpiController.DEFAULT_PORT
         val byeDpiListening = isPortListening("127.0.0.1", byeDpiPort, PROBE_TIMEOUT_MS)
         if (!byeDpiListening && !isTesting) {
-            Log.w(TAG, "Watchdog ($source): ByeByeDPI on port $byeDpiPort is not responding. Restarting...")
-            val antiDpiConfig = repository.antiDpiConfig.value
-            ByeDpiController.start(strategy = antiDpiConfig.strategy, port = byeDpiPort)
+            // Two-step verification before taking action
+            delay(500)
+            if (!isPortListening("127.0.0.1", byeDpiPort, PROBE_TIMEOUT_MS) && !isTesting) {
+                Log.w(TAG, "Watchdog ($source): ByeByeDPI on port $byeDpiPort is not responding after retry. Restarting...")
+                val antiDpiConfig = repository.antiDpiConfig.value
+                ByeDpiController.start(strategy = antiDpiConfig.strategy, port = byeDpiPort)
+            }
         }
     }
 
@@ -160,17 +169,20 @@ object ServiceWatchdog {
 
             cm.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    Log.d(TAG, "Network became available, triggering watchdog check in 1000ms")
-                    triggerCheck(delayMs = 1000L)
+                    Log.d(TAG, "Network became available, triggering watchdog check in 2000ms")
+                    triggerCheck(delayMs = 2000L)
                 }
 
                 override fun onLost(network: Network) {
-                    Log.d(TAG, "Network lost, triggering watchdog check in 1500ms")
-                    triggerCheck(delayMs = 1500L)
+                    Log.d(TAG, "Network lost, triggering watchdog check in 2000ms")
+                    triggerCheck(delayMs = 2000L)
                 }
 
                 override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                    // Validated network interface change
+                    if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                        Log.d(TAG, "Network validated, triggering check in 1500ms")
+                        triggerCheck(delayMs = 1500L)
+                    }
                 }
             })
         } catch (e: Exception) {
@@ -187,8 +199,8 @@ object ServiceWatchdog {
 
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(c: Context?, intent: Intent?) {
-                    Log.d(TAG, "Screen ON / User present detected, checking services")
-                    triggerCheck(delayMs = 300L)
+                    Log.d(TAG, "Screen ON / User present detected, checking services in 1000ms")
+                    triggerCheck(delayMs = 1000L)
                 }
             }
 

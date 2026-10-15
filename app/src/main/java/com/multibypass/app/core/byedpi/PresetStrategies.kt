@@ -41,7 +41,7 @@ object PresetStrategies {
     val defaultTestTargets = listOf(
         TestTarget("YouTube", "https://www.youtube.com/generate_204"),
         TestTarget("Instagram", "https://www.instagram.com"),
-        TestTarget("X (Twitter)", "https://x.com")
+        TestTarget("Facebook", "https://www.facebook.com")
     )
 
     fun loadStrategies(context: Context): List<String> {

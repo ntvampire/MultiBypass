@@ -86,6 +86,17 @@ fun MainScreen(
                     }
                 },
                 actions = {
+                    if (isConnected) {
+                        IconButton(onClick = {
+                            MultiBypassVpnService.reconnect(context)
+                        }) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Быстрый перезапуск сокетов",
+                                tint = GreenPrimary
+                            )
+                        }
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")
                     }

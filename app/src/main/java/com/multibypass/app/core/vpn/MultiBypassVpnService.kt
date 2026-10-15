@@ -35,6 +35,7 @@ class MultiBypassVpnService : VpnService() {
 
         const val ACTION_START = "com.multibypass.app.START_VPN"
         const val ACTION_STOP = "com.multibypass.app.STOP_VPN"
+        const val ACTION_RECONNECT = "com.multibypass.app.RECONNECT_VPN"
 
         private val _vpnStatus = MutableStateFlow(VpnStatus.DISCONNECTED)
         val vpnStatus: StateFlow<VpnStatus> = _vpnStatus.asStateFlow()
@@ -56,10 +57,22 @@ class MultiBypassVpnService : VpnService() {
             }
             context.startService(intent)
         }
+
+        fun reconnect(context: Context) {
+            val intent = Intent(context, MultiBypassVpnService::class.java).apply {
+                action = ACTION_RECONNECT
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
     }
 
     private var tunFd: ParcelFileDescriptor? = null
     private var dohServer: LocalDohServer? = null
+    private val vpnMutex = kotlinx.coroutines.sync.Mutex()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -70,6 +83,9 @@ class MultiBypassVpnService : VpnService() {
             }
             ACTION_START -> {
                 startVpn()
+            }
+            ACTION_RECONNECT -> {
+                reconnectVpn()
             }
             else -> {
                 if (_vpnStatus.value == VpnStatus.CONNECTED) {
@@ -209,38 +225,65 @@ class MultiBypassVpnService : VpnService() {
         _vpnStatus.value = VpnStatus.DISCONNECTED
 
         serviceScope.launch {
-            try {
-                TProxyService.TProxyStopService()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping TProxy", e)
+            vpnMutex.withLock {
+                try {
+                    TProxyService.TProxyStopService()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping TProxy", e)
+                }
+
+                delay(100)
+
+                try {
+                    tunFd?.close()
+                } catch (_: Exception) {}
+                tunFd = null
+
+                try {
+                    ByeDpiController.stop()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping ByeDPI", e)
+                }
+
+                try {
+                    dohServer?.stop()
+                    dohServer = null
+                    ByeDpiProxy.setDnsRedirectPort(0)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping Local DoH Server", e)
+                }
+
+                val repository = SettingsRepository.getInstance(applicationContext)
+                if (repository.tgConfig.value.autoStartWithVpn) {
+                    TelegramProxyService.stop(applicationContext)
+                }
+
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
+        }
+    }
 
-            try {
-                tunFd?.close()
-            } catch (_: Exception) {}
-            tunFd = null
-
-            try {
-                ByeDpiController.stop()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping ByeDPI", e)
+    private fun reconnectVpn() {
+        serviceScope.launch {
+            if (_vpnStatus.value != VpnStatus.CONNECTED) {
+                startVpn()
+                return@launch
             }
-
-            try {
-                dohServer?.stop()
-                dohServer = null
-                ByeDpiProxy.setDnsRedirectPort(0)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping Local DoH Server", e)
+            Log.i(TAG, "Reconnecting MultiBypass VPN internal sockets...")
+            vpnMutex.withLock {
+                try {
+                    val repository = SettingsRepository.getInstance(applicationContext)
+                    val antiDpiConfig = repository.antiDpiConfig.value
+                    ByeDpiController.stop()
+                    delay(250)
+                    ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
+                    ServiceWatchdog.triggerCheck(500)
+                    Log.i(TAG, "MultiBypass VPN internal sockets reconnected successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error during VPN soft reconnect: ${e.message}", e)
+                }
             }
-
-            val repository = SettingsRepository.getInstance(applicationContext)
-            if (repository.tgConfig.value.autoStartWithVpn) {
-                TelegramProxyService.stop(applicationContext)
-            }
-
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
         }
     }
 
