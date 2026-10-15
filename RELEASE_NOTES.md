@@ -1,3 +1,12 @@
+### 🌟 Обновление v1.2.1:
+
+- 🌐 **Новые профили SmartDNS в списке готовых серверов**:
+  - Добавлен профиль **GeoHide DNS** (`https://geohide.ru/dns-query`, резервный IP `193.233.112.67`) для стабильного доступа к ChatGPT, Canva, Notion и зарубежным сервисам из РФ.
+  - Добавлен профиль **BezMezhAU DNS** (`https://dns.bezmezhau.com/dns-query`, резервный IP `143.20.64.55`) для доступа к ChatGPT, Spotify и YouTube без ограничений (Беларусь/РФ).
+  - Полная поддержка автоматического переключения DoH ↔ стандартный IP (порт 53) для каждого профиля.
+
+---
+
 ### 🌟 Обновление v1.2.0:
 
 - 📱 **Плитки в шторке быстрых настроек Android (Quick Settings Tiles)**:
@@ -6,10 +15,6 @@
 
 - 🚀 **Автовыбор популярных приложений при первом старте (Zero-Config UX)**:
   - При первой установке приложение автоматически находит установленные на устройстве сервисы (YouTube, Instagram, Discord, Telegram, ChatGPT, Spotify, Facebook, Chrome) и включает их в список маршрутизации. Приложение готово к работе сразу после первого нажатия «Подключить».
-
-- 🌐 **Новые SmartDNS профили (GeoHide DNS и BezMezhAU DNS)**:
-  - Добавлен профиль **GeoHide DNS** (`https://geohide.ru/dns-query`, IP `193.233.112.67`) для стабильного доступа к ChatGPT, Canva, Notion и зарубежным сервисам из РФ.
-  - Добавлен профиль **BezMezhAU DNS** (`https://dns.bezmezhau.com/dns-query`, IP `143.20.64.55`) для доступа к ChatGPT, Spotify и YouTube без ограничений (Беларусь/РФ).
 
 - 🌐 **Расширенная база доменов по умолчанию**:
   - В группу «Свой DNS» добавлены сервисы Google Gemini & AI Studio, PlayStation Network, Xbox Live, аудио-CDN Spotify и SoundCloud.
