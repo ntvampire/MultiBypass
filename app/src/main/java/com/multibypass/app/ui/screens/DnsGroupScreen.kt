@@ -189,8 +189,7 @@ fun DnsGroupScreen(
                 )
                 TextButton(
                     onClick = {
-                        val defaultDomains = repository.loadDefaultDomainsFromAssets("domains_dns.txt")
-                        repository.updateDnsConfig(dnsConfig.copy(domains = defaultDomains))
+                        repository.resetDnsDomainsToDefaults()
                     }
                 ) {
                     Text("Сброс")
@@ -213,7 +212,7 @@ fun DnsGroupScreen(
                     onClick = {
                         val trimmed = newDomainInput.trim().lowercase()
                         if (trimmed.isNotBlank() && !dnsConfig.domains.contains(trimmed)) {
-                            repository.updateDnsConfig(dnsConfig.copy(domains = dnsConfig.domains + trimmed))
+                            repository.addDnsDomain(trimmed)
                             newDomainInput = ""
                         }
                     },
@@ -243,7 +242,7 @@ fun DnsGroupScreen(
                         Text(domain, style = MaterialTheme.typography.bodyMedium)
                         IconButton(
                             onClick = {
-                                repository.updateDnsConfig(dnsConfig.copy(domains = dnsConfig.domains - domain))
+                                repository.removeDnsDomain(domain)
                             },
                             modifier = Modifier.size(24.dp)
                         ) {

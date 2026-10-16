@@ -163,8 +163,7 @@ fun AntiDpiGroupScreen(
                 )
                 TextButton(
                     onClick = {
-                        val defaultDomains = repository.loadDefaultDomainsFromAssets("domains_antidpi.txt")
-                        repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = defaultDomains))
+                        repository.resetAntiDpiDomainsToDefaults()
                     }
                 ) {
                     Text("Сброс")
@@ -187,7 +186,7 @@ fun AntiDpiGroupScreen(
                     onClick = {
                         val trimmed = newDomainInput.trim().lowercase()
                         if (trimmed.isNotBlank() && !antiDpiConfig.domains.contains(trimmed)) {
-                            repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = antiDpiConfig.domains + trimmed))
+                            repository.addAntiDpiDomain(trimmed)
                             newDomainInput = ""
                         }
                     },
@@ -217,7 +216,7 @@ fun AntiDpiGroupScreen(
                         Text(domain, style = MaterialTheme.typography.bodyMedium)
                         IconButton(
                             onClick = {
-                                repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = antiDpiConfig.domains - domain))
+                                repository.removeAntiDpiDomain(domain)
                             },
                             modifier = Modifier.size(24.dp)
                         ) {

@@ -1,0 +1,42 @@
+name: Update Domain Lists
+
+on:
+  schedule:
+    # Run daily at 01:23 UTC (off-peak time to avoid GitHub Actions runner queues)
+    - cron: '23 1 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-domains:
+    name: Fetch, Filter & Publish Mobile Domain Lists
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Domain Lists Pipeline
+        run: |
+          python scripts/update_domains.py
+
+      - name: Commit & Push Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain docs/ app/src/main/assets/) ]]; then
+            echo "Domain lists changed. Committing and pushing..."
+            git add docs/ app/src/main/assets/
+            git commit -m "chore(domains): auto-update mobile domain lists and version metadata [skip ci]"
+            git push origin main
+          else
+            echo "No changes in domain lists."
+          fi

@@ -24,6 +24,8 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_BYPASS_LAN = "key_bypass_lan"
         private const val KEY_DOMAINS_LAST_SYNC = "key_domains_last_sync"
+        private const val KEY_CUSTOM_DNS_DOMAINS = "key_custom_dns_domains"
+        private const val KEY_CUSTOM_ANTIDPI_DOMAINS = "key_custom_antidpi_domains"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
         private const val CURRENT_DOMAINS_VERSION = 4
 
@@ -273,12 +275,15 @@ class SettingsRepository(private val context: Context) {
                 .filter { it.isNotBlank() && !it.startsWith("#") }
                 .distinct()
 
+            val customDns = loadCustomDomains(KEY_CUSTOM_DNS_DOMAINS)
+            val customAntiDpi = loadCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS)
+
             if (parsedDns.isNotEmpty()) {
-                val merged = (parsedDns + _dnsConfig.value.domains).distinct()
+                val merged = (parsedDns + customDns).distinct()
                 updateDnsConfig(_dnsConfig.value.copy(domains = merged))
             }
             if (parsedAntiDpi.isNotEmpty()) {
-                val merged = (parsedAntiDpi + _antiDpiConfig.value.domains).distinct()
+                val merged = (parsedAntiDpi + customAntiDpi).distinct()
                 updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = merged))
             }
 
@@ -288,6 +293,64 @@ class SettingsRepository(private val context: Context) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    fun addDnsDomain(domain: String) {
+        val trimmed = domain.trim().lowercase()
+        if (trimmed.isBlank()) return
+        val custom = loadCustomDomains(KEY_CUSTOM_DNS_DOMAINS).toMutableSet()
+        custom.add(trimmed)
+        saveCustomDomains(KEY_CUSTOM_DNS_DOMAINS, custom)
+        val merged = (_dnsConfig.value.domains + trimmed).distinct()
+        updateDnsConfig(_dnsConfig.value.copy(domains = merged))
+    }
+
+    fun removeDnsDomain(domain: String) {
+        val custom = loadCustomDomains(KEY_CUSTOM_DNS_DOMAINS).toMutableSet()
+        custom.remove(domain)
+        saveCustomDomains(KEY_CUSTOM_DNS_DOMAINS, custom)
+        val remaining = _dnsConfig.value.domains.filter { it != domain }
+        updateDnsConfig(_dnsConfig.value.copy(domains = remaining))
+    }
+
+    fun resetDnsDomainsToDefaults() {
+        val defaultDomains = loadDefaultDomainsFromAssets("domains_dns.txt")
+        val custom = loadCustomDomains(KEY_CUSTOM_DNS_DOMAINS)
+        val merged = (defaultDomains + custom).distinct()
+        updateDnsConfig(_dnsConfig.value.copy(domains = merged))
+    }
+
+    fun addAntiDpiDomain(domain: String) {
+        val trimmed = domain.trim().lowercase()
+        if (trimmed.isBlank()) return
+        val custom = loadCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS).toMutableSet()
+        custom.add(trimmed)
+        saveCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS, custom)
+        val merged = (_antiDpiConfig.value.domains + trimmed).distinct()
+        updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = merged))
+    }
+
+    fun removeAntiDpiDomain(domain: String) {
+        val custom = loadCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS).toMutableSet()
+        custom.remove(domain)
+        saveCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS, custom)
+        val remaining = _antiDpiConfig.value.domains.filter { it != domain }
+        updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = remaining))
+    }
+
+    fun resetAntiDpiDomainsToDefaults() {
+        val defaultDomains = loadDefaultDomainsFromAssets("domains_antidpi.txt")
+        val custom = loadCustomDomains(KEY_CUSTOM_ANTIDPI_DOMAINS)
+        val merged = (defaultDomains + custom).distinct()
+        updateAntiDpiConfig(_antiDpiConfig.value.copy(domains = merged))
+    }
+
+    private fun loadCustomDomains(key: String): Set<String> {
+        return prefs.getStringSet(key, emptySet()) ?: emptySet()
+    }
+
+    private fun saveCustomDomains(key: String, domains: Set<String>) {
+        prefs.edit().putStringSet(key, domains).apply()
     }
 
     private fun loadTgConfig(): TelegramProxyConfig {

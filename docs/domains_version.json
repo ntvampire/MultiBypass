@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-16T09:12:00Z",
+  "dns": {
+    "count": 45,
+    "sha256": "9f66a132cba68c161f6887ecd07c0126c9bd9070ec946c0cf0c3ad51967a81b4",
+    "filename": "domains_dns.txt"
+  },
+  "antidpi": {
+    "count": 43,
+    "sha256": "0ae7c6b58b7500882111bcb2f46b925f33a529ca8405262b6a7a92f2f6adef46",
+    "filename": "domains_antidpi.txt"
+  }
+}
