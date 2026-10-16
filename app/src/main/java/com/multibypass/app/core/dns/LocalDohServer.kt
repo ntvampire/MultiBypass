@@ -1,6 +1,7 @@
 package com.multibypass.app.core.dns
 
 import android.util.Log
+import com.multibypass.app.core.vpn.MultiBypassVpnService
 import kotlinx.coroutines.*
 import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
@@ -10,8 +11,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 
 class LocalDohServer(
     private val port: Int = 5353,
@@ -22,6 +25,9 @@ class LocalDohServer(
         private const val TAG = "LocalDohServer"
         private const val BUFFER_SIZE = 4096
         private val DNS_MESSAGE_MEDIA_TYPE = "application/dns-message".toMediaType()
+
+        @Volatile
+        var lastResolutionMode: String = "Не зафиксировано"
 
         private val DEFAULT_BOOTSTRAP_HOSTS = mapOf(
             "dns.comss.one" to listOf("92.223.109.31", "94.130.180.225"),
@@ -50,10 +56,38 @@ class LocalDohServer(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
+        .connectTimeout(3500, TimeUnit.MILLISECONDS)
+        .readTimeout(3500, TimeUnit.MILLISECONDS)
+        .writeTimeout(3500, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(true)
+        .socketFactory(object : SocketFactory() {
+            private val defaultFactory = SocketFactory.getDefault()
+            override fun createSocket(): Socket {
+                val s = defaultFactory.createSocket()
+                MultiBypassVpnService.protectSocket(s)
+                return s
+            }
+            override fun createSocket(host: String?, port: Int): Socket {
+                val s = defaultFactory.createSocket(host, port)
+                MultiBypassVpnService.protectSocket(s)
+                return s
+            }
+            override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket {
+                val s = defaultFactory.createSocket(host, port, localHost, localPort)
+                MultiBypassVpnService.protectSocket(s)
+                return s
+            }
+            override fun createSocket(host: InetAddress?, port: Int): Socket {
+                val s = defaultFactory.createSocket(host, port)
+                MultiBypassVpnService.protectSocket(s)
+                return s
+            }
+            override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket {
+                val s = defaultFactory.createSocket(address, port, localAddress, localPort)
+                MultiBypassVpnService.protectSocket(s)
+                return s
+            }
+        })
         .dns(object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
                 val ips = effectiveBootstrapHosts[hostname]
@@ -170,6 +204,7 @@ class LocalDohServer(
                         val respPacket = DatagramPacket(body, body.size, clientAddress, clientPort)
                         s.send(respPacket)
                         handled = true
+                        lastResolutionMode = "DoH (HTTPS)"
                     }
                 } else {
                     Log.w(TAG, "DoH server returned HTTP ${response.code}")
@@ -187,6 +222,8 @@ class LocalDohServer(
                     cache[queryHash] = Pair(now, fallbackResp)
                     val respPacket = DatagramPacket(fallbackResp, fallbackResp.size, clientAddress, clientPort)
                     s.send(respPacket)
+                    handled = true
+                    lastResolutionMode = "Резерв (UDP :53)"
                     Log.d(TAG, "Resolved query via Standard DNS fallback ($fallbackStandardIp:53)")
                 }
             } catch (e: Exception) {
@@ -205,6 +242,7 @@ class LocalDohServer(
             clientSocket = DatagramSocket().apply {
                 soTimeout = timeoutMs
             }
+            MultiBypassVpnService.protectSocket(clientSocket)
             val serverAddr = InetAddress.getByName(serverIp)
             val sendPacket = DatagramPacket(queryBytes, queryBytes.size, serverAddr, 53)
             clientSocket.send(sendPacket)

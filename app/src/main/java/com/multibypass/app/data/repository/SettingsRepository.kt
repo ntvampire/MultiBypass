@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.DnsGroupConfig
+import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.model.TelegramProxyConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,7 +91,7 @@ class SettingsRepository(private val context: Context) {
             val assetsDns = loadDefaultDomainsFromAssets("domains_dns.txt")
             val currentDns = _dnsConfig.value
             val mergedDnsDomains = (assetsDns + currentDns.domains).distinct()
-            updateDnsConfig(currentDns.copy(domains = mergedDnsDomains))
+            updateDnsConfig(currentDns.copy(domains = mergedDnsDomains, mode = DnsMode.DOH))
 
             val assetsAntiDpi = loadDefaultDomainsFromAssets("domains_antidpi.txt")
             val currentAntiDpi = _antiDpiConfig.value
@@ -124,8 +125,9 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun updateDnsConfig(config: DnsGroupConfig) {
-        _dnsConfig.value = config
-        prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(config)).apply()
+        val enforced = config.copy(mode = DnsMode.DOH)
+        _dnsConfig.value = enforced
+        prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(enforced)).apply()
     }
 
     fun updateAntiDpiConfig(config: AntiDpiGroupConfig) {
@@ -197,7 +199,7 @@ class SettingsRepository(private val context: Context) {
         val json = prefs.getString(KEY_DNS_CONFIG, null)
         val loaded = if (json != null) {
             try {
-                gson.fromJson(json, DnsGroupConfig::class.java) ?: DnsGroupConfig()
+                gson.fromJson(json, DnsGroupConfig::class.java)?.copy(mode = DnsMode.DOH) ?: DnsGroupConfig()
             } catch (_: Exception) {
                 DnsGroupConfig()
             }
@@ -205,9 +207,9 @@ class SettingsRepository(private val context: Context) {
             DnsGroupConfig()
         }
         return if (loaded.domains.isEmpty()) {
-            loaded.copy(domains = loadDefaultDomainsFromAssets("domains_dns.txt"))
+            loaded.copy(domains = loadDefaultDomainsFromAssets("domains_dns.txt"), mode = DnsMode.DOH)
         } else {
-            loaded
+            loaded.copy(mode = DnsMode.DOH)
         }
     }
 

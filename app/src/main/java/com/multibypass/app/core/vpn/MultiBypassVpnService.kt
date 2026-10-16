@@ -16,18 +16,19 @@ import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.dns.LocalDohServer
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.watchdog.ServiceWatchdog
-import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
 import io.github.romanvht.byedpi.core.TProxyService
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.net.DatagramSocket
+import java.net.Socket
 
 class MultiBypassVpnService : VpnService() {
 
@@ -41,6 +42,17 @@ class MultiBypassVpnService : VpnService() {
 
         private val _vpnStatus = MutableStateFlow(VpnStatus.DISCONNECTED)
         val vpnStatus: StateFlow<VpnStatus> = _vpnStatus.asStateFlow()
+
+        @Volatile
+        private var instance: MultiBypassVpnService? = null
+
+        fun protectSocket(socket: DatagramSocket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
+
+        fun protectSocket(socket: Socket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
 
         fun start(context: Context) {
             val intent = Intent(context, MultiBypassVpnService::class.java).apply {
@@ -74,8 +86,13 @@ class MultiBypassVpnService : VpnService() {
 
     private var tunFd: ParcelFileDescriptor? = null
     private var dohServer: LocalDohServer? = null
-    private val vpnMutex = kotlinx.coroutines.sync.Mutex()
+    private val vpnMutex = Mutex()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -129,30 +146,21 @@ class MultiBypassVpnService : VpnService() {
                     TelegramProxyService.start(applicationContext)
                 }
 
-                // 3. Configure DNS & Local DoH Server
-                val effectiveDns = dnsConfig.getEffectiveDns()
+                // 3. Configure Local DoH Server (always active on port 5353 with automatic Standard UDP fallback)
+                val dohUrl = dnsConfig.getDohUrl()
                 val fallbackStandardIp = dnsConfig.getEffectiveStandardIp()
-                val dnsServer = if (dnsConfig.mode == DnsMode.DOH) {
-                    try {
-                        dohServer?.stop()
-                        dohServer = LocalDohServer(
-                            port = 5353,
-                            dohUrl = effectiveDns,
-                            fallbackStandardIp = fallbackStandardIp
-                        ).apply { start() }
-                        ByeDpiProxy.setDnsRedirectPort(5353)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
-                    }
-                    "10.10.10.1"
-                } else {
-                    try {
-                        dohServer?.stop()
-                        dohServer = null
-                        ByeDpiProxy.setDnsRedirectPort(0)
-                    } catch (_: Exception) {}
-                    effectiveDns
+                try {
+                    dohServer?.stop()
+                    dohServer = LocalDohServer(
+                        port = 5353,
+                        dohUrl = dohUrl,
+                        fallbackStandardIp = fallbackStandardIp
+                    ).apply { start() }
+                    ByeDpiProxy.setDnsRedirectPort(5353)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
                 }
+                val dnsServer = "10.10.10.1"
 
                 val routeAll = repository.routeAllApps.value
                 val allowedApps = repository.routedApps.value
@@ -300,6 +308,9 @@ class MultiBypassVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
         stopVpn()
         serviceScope.cancel()
     }

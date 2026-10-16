@@ -3,6 +3,7 @@ package com.multibypass.app.core.diagnostics
 import android.content.Context
 import android.os.Build
 import com.multibypass.app.core.byedpi.ByeDpiController
+import com.multibypass.app.core.dns.LocalDohServer
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
@@ -120,23 +121,24 @@ object NetworkDiagnostics {
         val dnsConfig = repository.dnsConfig.value
         val dohPort = 5353
         val dohStart = System.currentTimeMillis()
-        val dohResolved = testDnsResolution("127.0.0.1", dohPort, "google.com", 2000)
+        val dohResolved = testDnsResolution("127.0.0.1", dohPort, "google.com", 3500)
         val dohTime = System.currentTimeMillis() - dohStart
         steps.add(
             if (dohResolved != null) {
+                val mode = LocalDohServer.lastResolutionMode
                 DiagnosticStepResult(
                     title = "Локальный DoH-сервер",
-                    description = "Отвечает на 127.0.0.1:$dohPort",
+                    description = "Отвечает на 127.0.0.1:$dohPort ($mode)",
                     status = DiagnosticStatus.SUCCESS,
                     latencyMs = dohTime,
-                    detail = "IP: $dohResolved (Пресет: ${dnsConfig.presetId})"
+                    detail = "$dohResolved (Пресет: ${dnsConfig.presetId})"
                 )
             } else {
                 DiagnosticStepResult(
                     title = "Локальный DoH-сервер",
                     description = "Нет ответа от 127.0.0.1:$dohPort",
                     status = if (vpnStatus == VpnStatus.CONNECTED) DiagnosticStatus.ERROR else DiagnosticStatus.WARNING,
-                    detail = "DoH URL: ${dnsConfig.getEffectiveDns()}"
+                    detail = "DoH URL: ${dnsConfig.getDohUrl()} (Резерв: ${dnsConfig.getEffectiveStandardIp()}:53)"
                 )
             }
         )

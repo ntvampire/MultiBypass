@@ -794,7 +794,7 @@ int on_udp_tunnel(struct poolhd *pool, struct eval *val, int et)
             }
             if (g_block_quic && ntohs(addr.in.sin_port) == 443) {
                 LOG(LOG_S, "QUIC (UDP 443) blocked by policy\n");
-                return -1;
+                continue;
             }
             if (g_dns_redirect_port > 0 && ntohs(addr.in.sin_port) == 53) {
                 pair->orig_addr = addr;
