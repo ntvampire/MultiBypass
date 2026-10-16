@@ -11,15 +11,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.Socket
+import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import javax.net.SocketFactory
 
 class LocalDohServer(
-    private val port: Int = 5353,
+    private val port: Int = 8053,
     private val dohUrl: String = "https://dns.comss.one/dns-query",
-    private val fallbackStandardIp: String = "92.223.109.31"
+    private val fallbackStandardIp: String = "83.220.169.155"
 ) {
     companion object {
         private const val TAG = "LocalDohServer"
@@ -30,9 +29,9 @@ class LocalDohServer(
         var lastResolutionMode: String = "Не зафиксировано"
 
         private val DEFAULT_BOOTSTRAP_HOSTS = mapOf(
-            "dns.comss.one" to listOf("92.223.109.31", "94.130.180.225"),
-            "geohide.ru" to listOf("193.233.112.67"),
-            "dns.bezmezhau.com" to listOf("143.20.64.55"),
+            "dns.comss.one" to listOf("83.220.169.155", "212.109.195.93", "94.250.253.55", "195.133.25.16"),
+            "geohide.ru" to listOf("193.233.112.67", "159.194.200.33", "37.230.192.51"),
+            "dns.bezmezhau.com" to listOf("143.20.64.55", "31.58.216.201"),
             "dns.nextdns.io" to listOf("45.90.28.0", "45.90.30.0")
         )
     }
@@ -56,38 +55,10 @@ class LocalDohServer(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(3500, TimeUnit.MILLISECONDS)
-        .readTimeout(3500, TimeUnit.MILLISECONDS)
-        .writeTimeout(3500, TimeUnit.MILLISECONDS)
+        .connectTimeout(1500, TimeUnit.MILLISECONDS)
+        .readTimeout(1500, TimeUnit.MILLISECONDS)
+        .writeTimeout(1500, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(true)
-        .socketFactory(object : SocketFactory() {
-            private val defaultFactory = SocketFactory.getDefault()
-            override fun createSocket(): Socket {
-                val s = defaultFactory.createSocket()
-                MultiBypassVpnService.protectSocket(s)
-                return s
-            }
-            override fun createSocket(host: String?, port: Int): Socket {
-                val s = defaultFactory.createSocket(host, port)
-                MultiBypassVpnService.protectSocket(s)
-                return s
-            }
-            override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket {
-                val s = defaultFactory.createSocket(host, port, localHost, localPort)
-                MultiBypassVpnService.protectSocket(s)
-                return s
-            }
-            override fun createSocket(host: InetAddress?, port: Int): Socket {
-                val s = defaultFactory.createSocket(host, port)
-                MultiBypassVpnService.protectSocket(s)
-                return s
-            }
-            override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket {
-                val s = defaultFactory.createSocket(address, port, localAddress, localPort)
-                MultiBypassVpnService.protectSocket(s)
-                return s
-            }
-        })
         .dns(object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
                 val ips = effectiveBootstrapHosts[hostname]
@@ -100,7 +71,7 @@ class LocalDohServer(
                     if (fallbackStandardIp.isNotBlank()) {
                         listOf(InetAddress.getByName(fallbackStandardIp))
                     } else {
-                        listOf(InetAddress.getByName("92.223.109.31"))
+                        listOf(InetAddress.getByName("83.220.169.155"))
                     }
                 }
             }
@@ -114,8 +85,9 @@ class LocalDohServer(
 
         serverJob = scope.launch {
             try {
-                val s = DatagramSocket(port, InetAddress.getByName("127.0.0.1")).apply {
+                val s = DatagramSocket(null).apply {
                     reuseAddress = true
+                    bind(InetSocketAddress("127.0.0.1", port))
                 }
                 socket = s
                 Log.i(TAG, "Local DoH Server started on 127.0.0.1:$port forwarding to $dohUrl (fallback: $fallbackStandardIp:53)")
@@ -140,7 +112,7 @@ class LocalDohServer(
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error in Local DoH Server: ${e.message}", e)
+                Log.e(TAG, "Error in Local DoH Server on port $port: ${e.message}", e)
             } finally {
                 try {
                     socket?.close()
@@ -157,6 +129,9 @@ class LocalDohServer(
         s: DatagramSocket
     ) {
         if (queryBytes.size < 12) return
+
+        val queryId0 = queryBytes[0]
+        val queryId1 = queryBytes[1]
 
         // IPv6 Leak Protection: Block AAAA records at local DNS level
         // Returns instant NOERROR with 0 answers (NODATA), forcing apps to use pure IPv4 without lag
@@ -177,8 +152,8 @@ class LocalDohServer(
         val cached = cache[queryHash]
         if (cached != null && (now - cached.first) < 60_000) {
             val resp = cached.second.clone()
-            resp[0] = queryBytes[0]
-            resp[1] = queryBytes[1]
+            resp[0] = queryId0
+            resp[1] = queryId1
             try {
                 val respPacket = DatagramPacket(resp, resp.size, clientAddress, clientPort)
                 s.send(respPacket)
@@ -188,37 +163,43 @@ class LocalDohServer(
 
         var handled = false
 
-        try {
-            val request = Request.Builder()
-                .url(dohUrl)
-                .addHeader("Accept", "application/dns-message")
-                .addHeader("Content-Type", "application/dns-message")
-                .post(queryBytes.toRequestBody(DNS_MESSAGE_MEDIA_TYPE))
-                .build()
+        if (dohUrl.isNotBlank() && (dohUrl.startsWith("https://") || dohUrl.startsWith("http://"))) {
+            try {
+                val request = Request.Builder()
+                    .url(dohUrl)
+                    .addHeader("Accept", "application/dns-message")
+                    .addHeader("Content-Type", "application/dns-message")
+                    .post(queryBytes.toRequestBody(DNS_MESSAGE_MEDIA_TYPE))
+                    .build()
 
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.bytes()
-                    if (body != null && body.size >= 12) {
-                        cache[queryHash] = Pair(now, body)
-                        val respPacket = DatagramPacket(body, body.size, clientAddress, clientPort)
-                        s.send(respPacket)
-                        handled = true
-                        lastResolutionMode = "DoH (HTTPS)"
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.bytes()
+                        if (body != null && body.size >= 12) {
+                            body[0] = queryId0
+                            body[1] = queryId1
+                            cache[queryHash] = Pair(now, body)
+                            val respPacket = DatagramPacket(body, body.size, clientAddress, clientPort)
+                            s.send(respPacket)
+                            handled = true
+                            lastResolutionMode = "DoH (HTTPS)"
+                        }
+                    } else {
+                        Log.w(TAG, "DoH server returned HTTP ${response.code}")
                     }
-                } else {
-                    Log.w(TAG, "DoH server returned HTTP ${response.code}")
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "DoH query error: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "DoH query error: ${e.message}")
         }
 
         // Automatic fallback to Standard UDP DNS (port 53) if DoH was blocked, timed out or failed
         if (!handled && fallbackStandardIp.isNotBlank()) {
             try {
-                val fallbackResp = queryStandardDns(queryBytes, fallbackStandardIp)
+                val fallbackResp = queryStandardDns(queryBytes, fallbackStandardIp, timeoutMs = 1500)
                 if (fallbackResp != null && fallbackResp.size >= 12) {
+                    fallbackResp[0] = queryId0
+                    fallbackResp[1] = queryId1
                     cache[queryHash] = Pair(now, fallbackResp)
                     val respPacket = DatagramPacket(fallbackResp, fallbackResp.size, clientAddress, clientPort)
                     s.send(respPacket)
@@ -235,14 +216,16 @@ class LocalDohServer(
     private fun queryStandardDns(
         queryBytes: ByteArray,
         serverIp: String,
-        timeoutMs: Int = 3000
+        timeoutMs: Int = 1500
     ): ByteArray? {
         var clientSocket: DatagramSocket? = null
         return try {
             clientSocket = DatagramSocket().apply {
                 soTimeout = timeoutMs
             }
-            MultiBypassVpnService.protectSocket(clientSocket)
+            try {
+                MultiBypassVpnService.protectSocket(clientSocket)
+            } catch (_: Exception) {}
             val serverAddr = InetAddress.getByName(serverIp)
             val sendPacket = DatagramPacket(queryBytes, queryBytes.size, serverAddr, 53)
             clientSocket.send(sendPacket)

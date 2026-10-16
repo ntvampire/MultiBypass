@@ -7,7 +7,7 @@ object DnsPresets {
         DnsPreset(
             id = "comss",
             name = "Comss.one DNS",
-            standardIp = "92.223.109.31",
+            standardIp = "83.220.169.155",
             dohUrl = "https://dns.comss.one/dns-query",
             description = "SmartDNS: ChatGPT, Claude, Copilot, Spotify, Xbox, Canva, Notion"
         ),
@@ -35,7 +35,7 @@ object DnsPresets {
         DnsPreset(
             id = "dns_ai",
             name = "DNS-AI",
-            standardIp = "92.223.109.31",
+            standardIp = "83.220.169.155",
             dohUrl = "https://dns.comss.one/dns-query",
             description = "Оптимизация доступа к ИИ: OpenAI ChatGPT, Anthropic Claude, Midjourney"
         ),

@@ -146,21 +146,20 @@ class MultiBypassVpnService : VpnService() {
                     TelegramProxyService.start(applicationContext)
                 }
 
-                // 3. Configure Local DoH Server (always active on port 5353 with automatic Standard UDP fallback)
+                // 3. Configure Local DoH Server (active on port 8053 with automatic Standard UDP fallback)
                 val dohUrl = dnsConfig.getDohUrl()
                 val fallbackStandardIp = dnsConfig.getEffectiveStandardIp()
                 try {
                     dohServer?.stop()
                     dohServer = LocalDohServer(
-                        port = 5353,
+                        port = 8053,
                         dohUrl = dohUrl,
                         fallbackStandardIp = fallbackStandardIp
                     ).apply { start() }
-                    ByeDpiProxy.setDnsRedirectPort(5353)
+                    ByeDpiProxy.setDnsRedirectPort(8053)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
                 }
-                val dnsServer = "10.10.10.1"
 
                 val routeAll = repository.routeAllApps.value
                 val allowedApps = repository.routedApps.value
@@ -181,7 +180,17 @@ class MultiBypassVpnService : VpnService() {
                     } else {
                         addRoute("0.0.0.0", 0)
                     }
-                    addDnsServer(dnsServer)
+
+                    // Primary DNS is local redirect (10.10.10.1 -> ByeDPI -> LocalDohServer:8053)
+                    addDnsServer("10.10.10.1")
+                    // Secondary DNS is the preset's standard IP as OS-level fallback
+                    if (fallbackStandardIp.isNotBlank() && fallbackStandardIp != "10.10.10.1") {
+                        try {
+                            addDnsServer(fallbackStandardIp)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Cannot add fallback DNS server: $fallbackStandardIp", e)
+                        }
+                    }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         setMetered(false)

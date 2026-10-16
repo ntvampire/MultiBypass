@@ -117,9 +117,9 @@ object NetworkDiagnostics {
             }
         )
 
-        // 3. Local DoH Server (Port 5353) Check
+        // 3. Local DoH Server (Port 8053) Check
         val dnsConfig = repository.dnsConfig.value
-        val dohPort = 5353
+        val dohPort = 8053
         val dohStart = System.currentTimeMillis()
         val dohResolved = testDnsResolution("127.0.0.1", dohPort, "google.com", 3500)
         val dohTime = System.currentTimeMillis() - dohStart
