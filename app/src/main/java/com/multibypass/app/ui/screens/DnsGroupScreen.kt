@@ -79,13 +79,13 @@ fun DnsGroupScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Автоматический режим (DoH + Резерв)",
+                            text = "SmartDNS-маршрутизация",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Запросы шифруются через DoH. При недоступности DoH-канала или сетевых сбоях MultiBypass автоматически переключается на стандартный DNS этого же сервиса.",
+                            text = "Обход гео-блокировок зарубежных сервисов и нейросетей.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )

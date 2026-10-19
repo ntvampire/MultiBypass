@@ -75,6 +75,8 @@ fun SettingsScreen(
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var updateStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isUpdatingLists by remember { mutableStateOf(false) }
+    var listsUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -250,6 +252,69 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Lists Update section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Списки правил и DNS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Правила DNS, десинхронизации и серверы SmartDNS",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (isUpdatingLists) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), color = GreenPrimary)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Загрузка списков...", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isUpdatingLists = true
+                                    listsUpdateStatusMessage = null
+                                    val result = com.multibypass.app.core.lists.ListUpdateManager.forceUpdateAll(context)
+                                    isUpdatingLists = false
+                                    listsUpdateStatusMessage = if (result.success) {
+                                        "Обновлено: DNS (${result.dnsCount}), Anti-DPI (${result.antiDpiCount}), Серверы (${result.dnsProvidersCount})"
+                                    } else {
+                                        result.errorMessage ?: "Ошибка загрузки списков"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Обновить все списки")
+                        }
+                    }
+
+                    if (listsUpdateStatusMessage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            listsUpdateStatusMessage!!,
+                            color = if (listsUpdateStatusMessage!!.startsWith("Обновлено")) GreenPrimary else AccentOrange,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // About Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -260,7 +325,7 @@ fun SettingsScreen(
                     Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "MultiBypass — сетевая утилита раздельной маршрутизации, тестирования устойчивости соединений и анализа транспортных протоколов для Android. Объединяет защищённый DNS-резолвинг (RFC 8484 DoH), модуль десинхронизации TCP-сегментов и локальный транспортный шлюз MTProto WebSocket.",
+                        text = "MultiBypass — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartDNS, ByeByeDPI, Telegram WebSocket Proxy).",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

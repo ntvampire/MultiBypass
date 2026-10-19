@@ -64,7 +64,17 @@ data class DnsGroupConfig(
         return when (mode) {
             DnsMode.STANDARD -> getEffectiveStandardIp()
             DnsMode.DOH -> {
+                val preset = com.multibypass.app.core.dns.DnsPresets.findById(presetId)
+                if (preset.id != "custom" && preset.dohUrl.isNotBlank()) {
+                    if (preset.requiresProfileId) {
+                        val profile = nextDnsProfileId.trim().ifBlank { "dns" }
+                        return "${preset.dohUrl.trimEnd('/')}/$profile"
+                    }
+                    return preset.dohUrl
+                }
                 when (presetId) {
+                    "webshift" -> "https://d.webshiftvpn.ru/dns-query"
+                    "zapret" -> "https://dns.zapret.moe/dns-query"
                     "comss" -> "https://dns.comss.one/dns-query"
                     "geohide" -> "https://geohide.ru/dns-query"
                     "bezmezhau" -> "https://dns.bezmezhau.com/dns-query"
@@ -74,21 +84,27 @@ data class DnsGroupConfig(
                         val profile = nextDnsProfileId.trim().ifBlank { "dns" }
                         "https://dns.nextdns.io/$profile"
                     }
-                    else -> customDohUrl.ifBlank { "https://dns.comss.one/dns-query" }
+                    else -> customDohUrl.ifBlank { "https://d.webshiftvpn.ru/dns-query" }
                 }
             }
         }
     }
 
     fun getEffectiveStandardIp(): String {
+        val preset = com.multibypass.app.core.dns.DnsPresets.findById(presetId)
+        if (preset.id != "custom" && preset.standardIp.isNotBlank()) {
+            return preset.standardIp
+        }
         return when (presetId) {
+            "webshift" -> "31.31.207.68"
+            "zapret" -> "83.217.211.149"
             "comss" -> "92.223.109.31"
             "geohide" -> "193.233.112.67"
             "bezmezhau" -> "143.20.64.55"
             "xbox" -> "185.51.200.2"
             "dns_ai" -> "92.223.109.31"
             "nextdns" -> "45.90.28.0"
-            else -> customStandardIp.ifBlank { "92.223.109.31" }
+            else -> customStandardIp.ifBlank { "31.31.207.68" }
         }
     }
 }
@@ -170,16 +186,21 @@ val POPULAR_PACKAGES = setOf(
     "com.google.android.youtube",
     "app.revanced.android.youtube",
     "com.vanced.android.youtube",
-    "com.instagram.android",
     "com.discord",
     "org.telegram.messenger",
     "org.telegram.messenger.web",
     "org.telegram.plus",
     "com.openai.chatgpt",
-    "com.twitter.android",
-    "com.android.chrome",
+    "ai.anthropic.claudeforandroid",
+    "ai.perplexity.app.android",
     "com.spotify.music",
-    "com.zhiliaoapp.musically",
+    "notion.id",
+    "com.canva.editor",
+    "com.instagram.android",
+    "com.instagram.barcelona",
     "com.facebook.katana",
-    "com.facebook.orca"
+    "com.facebook.orca",
+    "com.twitter.android",
+    "org.thoughtcrime.securesms",
+    "com.zhiliaoapp.musically"
 )

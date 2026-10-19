@@ -1,0 +1,66 @@
+[
+  {
+    "id": "webshift",
+    "name": "WebShift DNS",
+    "standardIp": "31.31.207.68",
+    "dohUrl": "https://d.webshiftvpn.ru/dns-query",
+    "description": "SmartDNS: ChatGPT, Gemini, Claude, Copilot, Xbox, Notion (400+ сервисов)"
+  },
+  {
+    "id": "zapret",
+    "name": "Zapret DNS",
+    "standardIp": "83.217.211.149",
+    "dohUrl": "https://dns.zapret.moe/dns-query",
+    "description": "SmartDNS: ChatGPT, Claude, Spotify и обход гео-блокировок"
+  },
+  {
+    "id": "comss",
+    "name": "Comss.one DNS",
+    "standardIp": "92.223.109.31",
+    "dohUrl": "https://dns.comss.one/dns-query",
+    "description": "SmartDNS: ChatGPT, Claude, Copilot, Spotify, Xbox, Canva, Notion"
+  },
+  {
+    "id": "geohide",
+    "name": "GeoHide DNS",
+    "standardIp": "193.233.112.67",
+    "dohUrl": "https://geohide.ru/dns-query",
+    "description": "SmartDNS: обход гео-блокировок зарубежных сервисов и ИИ (Россия)"
+  },
+  {
+    "id": "bezmezhau",
+    "name": "BezMezhAU DNS",
+    "standardIp": "143.20.64.55",
+    "dohUrl": "https://dns.bezmezhau.com/dns-query",
+    "description": "SmartDNS: обход санкций и блокировок ChatGPT/Spotify/YouTube (Беларусь/РФ)"
+  },
+  {
+    "id": "xbox",
+    "name": "Xbox / Microsoft DNS",
+    "standardIp": "185.51.200.2",
+    "dohUrl": "https://dns.comss.one/dns-query",
+    "description": "Специализированный DNS для Xbox Live, Microsoft Store и сетевых игр"
+  },
+  {
+    "id": "dns_ai",
+    "name": "DNS-AI",
+    "standardIp": "92.223.109.31",
+    "dohUrl": "https://dns.comss.one/dns-query",
+    "description": "Оптимизация доступа к ИИ: OpenAI ChatGPT, Anthropic Claude, Midjourney"
+  },
+  {
+    "id": "nextdns",
+    "name": "NextDNS",
+    "standardIp": "45.90.28.0",
+    "dohUrl": "https://dns.nextdns.io/",
+    "requiresProfileId": true,
+    "description": "Персональный облачный DNS (требуется ID профиля, например: abc123)"
+  },
+  {
+    "id": "custom",
+    "name": "Пользовательский (Вручную)",
+    "standardIp": "",
+    "dohUrl": "",
+    "description": "Ручной ввод собственного IP или DoH адреса"
+  }
+]

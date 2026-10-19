@@ -214,10 +214,12 @@ object AppUpdateManager {
             }
 
             _downloadProgress.value = 100
+            pendingInstallApk = apkFile
             installApk(context, apkFile, notificationManager, notifId)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to download update APK", e)
             _downloadProgress.value = null
+            pendingInstallApk = null
             notificationManager.cancel(notifId)
         } finally {
             connection?.disconnect()
@@ -227,6 +229,34 @@ object AppUpdateManager {
                 } catch (_: Exception) {}
             }
         }
+    }
+
+    @Volatile
+    private var pendingInstallApk: File? = null
+
+    fun checkAndInstallPendingApk(context: Context): Boolean {
+        val file = pendingInstallApk ?: File(context.cacheDir, "update.apk").takeIf { it.exists() && _downloadProgress.value == 100 }
+        if (file != null && file.exists()) {
+            try {
+                val contentUri: Uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    file
+                )
+
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(contentUri, "application/vnd.android.package-archive")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+
+                context.startActivity(installIntent)
+                pendingInstallApk = null
+                return true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch package installer from foreground", e)
+            }
+        }
+        return false
     }
 
     private fun installApk(
@@ -269,8 +299,9 @@ object AppUpdateManager {
             }
 
             context.startActivity(installIntent)
+            pendingInstallApk = null
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch package installer", e)
+            Log.e(TAG, "Failed to launch package installer (background start might be blocked)", e)
         }
     }
 

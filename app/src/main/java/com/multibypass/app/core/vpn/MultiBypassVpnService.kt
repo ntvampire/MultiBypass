@@ -163,7 +163,7 @@ class MultiBypassVpnService : VpnService() {
                         )
                     )
                     addAddress("10.10.10.10", 32)
-                    addRoute("0.0.0.0", 0)
+                    setupRoutesWithLanBypass(this)
                     addDnsServer(dnsServer)
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -318,5 +318,43 @@ class MultiBypassVpnService : VpnService() {
             .addAction(0, getString(R.string.vpn_action_stop), stopIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun setupRoutesWithLanBypass(builder: Builder) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            builder.addRoute("0.0.0.0", 0)
+            try {
+                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("10.0.0.0"), 8))
+                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("172.16.0.0"), 12))
+                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("192.168.0.0"), 16))
+                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("169.254.0.0"), 16))
+            } catch (e: Exception) {
+                Log.w(TAG, "excludeRoute failed, falling back to 0.0.0.0/0", e)
+            }
+        } else {
+            val nonLanSubnets = listOf(
+                "1.0.0.0" to 8, "2.0.0.0" to 7, "4.0.0.0" to 6, "8.0.0.0" to 7,
+                "11.0.0.0" to 8, "12.0.0.0" to 6, "16.0.0.0" to 4, "32.0.0.0" to 3,
+                "64.0.0.0" to 2, "128.0.0.0" to 3, "160.0.0.0" to 5, "168.0.0.0" to 6,
+                "170.0.0.0" to 7, "172.0.0.0" to 12, "172.32.0.0" to 11, "172.64.0.0" to 10,
+                "172.128.0.0" to 9, "173.0.0.0" to 8, "174.0.0.0" to 7, "176.0.0.0" to 4,
+                "192.0.0.0" to 9, "192.128.0.0" to 11, "192.160.0.0" to 13, "192.169.0.0" to 16,
+                "192.170.0.0" to 15, "192.172.0.0" to 14, "192.176.0.0" to 12, "192.192.0.0" to 10,
+                "193.0.0.0" to 8, "194.0.0.0" to 7, "196.0.0.0" to 6, "200.0.0.0" to 5,
+                "208.0.0.0" to 4
+            )
+            for ((addr, prefix) in nonLanSubnets) {
+                try {
+                    builder.addRoute(addr, prefix)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to add route $addr/$prefix", e)
+                }
+            }
+        }
+        try {
+            builder.allowBypass()
+        } catch (e: Exception) {
+            Log.w(TAG, "allowBypass failed", e)
+        }
     }
 }

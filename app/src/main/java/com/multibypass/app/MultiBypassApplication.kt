@@ -19,6 +19,7 @@ class MultiBypassApplication : Application() {
         super.onCreate()
         setupCrashLogger()
         createNotificationChannels()
+        com.multibypass.app.core.lists.ListUpdateManager.initLocalLists(this)
         ServiceWatchdog.init(this)
     }
 

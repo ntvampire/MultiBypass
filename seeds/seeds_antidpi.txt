@@ -1,0 +1,56 @@
+# MultiBypass - Базовые мобильные семена для группы "Десинхронизация TCP (ByeByeDPI)"
+# Строго мобильные сервисы: YouTube, Discord, Meta, X, Signal, Cloudflare ECH
+# Никаких торрентов, трекеров и десктопного мусора
+
+# 1. YouTube & Google Video CDN (мобильный стриминг, Shorts, превью, манифесты)
+googlevideo.com
+youtube.com
+youtu.be
+ytimg.com
+i.ytimg.com
+ggpht.com
+yt3.ggpht.com
+yt4.ggpht.com
+youtubei.googleapis.com
+jnn-pa.googleapis.com
+manifest.googlevideo.com
+wide-youtube.l.google.com
+video.google.com
+redirector.googlevideo.com
+
+# 2. Discord Mobile (голосовые шлюзы, WebRTC, медиа и аватары)
+discord.com
+discordapp.com
+discord.gg
+discordapp.net
+discord.media
+discordcdn.com
+discord.dev
+dis.gd
+gateway.discord.gg
+status.discord.com
+cdn.discordapp.com
+
+# 3. Meta Mobile (Instagram, Threads, Facebook)
+instagram.com
+cdninstagram.com
+i.instagram.com
+graph.instagram.com
+gateway.instagram.com
+threads.net
+facebook.com
+fbcdn.net
+meta.com
+
+# 4. X / Twitter Mobile
+twitter.com
+x.com
+t.co
+twimg.com
+pbs.twimg.com
+video.twimg.com
+
+# 5. Шифрованный транспорт и приватные мессенджеры
+cloudflare-ech.com
+signal.org
+whispersystems.org

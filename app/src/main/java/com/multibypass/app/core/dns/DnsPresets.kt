@@ -1,9 +1,30 @@
 package com.multibypass.app.core.dns
 
+import android.content.Context
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.multibypass.app.data.model.DnsPreset
+import java.io.File
 
 object DnsPresets {
-    val list = listOf(
+    private const val TAG = "DnsPresets"
+
+    private val defaultPresets = listOf(
+        DnsPreset(
+            id = "webshift",
+            name = "WebShift DNS",
+            standardIp = "31.31.207.68",
+            dohUrl = "https://d.webshiftvpn.ru/dns-query",
+            description = "SmartDNS: ChatGPT, Gemini, Claude, Copilot, Xbox, Notion (400+ сервисов)"
+        ),
+        DnsPreset(
+            id = "zapret",
+            name = "Zapret DNS",
+            standardIp = "83.217.211.149",
+            dohUrl = "https://dns.zapret.moe/dns-query",
+            description = "SmartDNS: ChatGPT, Claude, Spotify и обход гео-блокировок"
+        ),
         DnsPreset(
             id = "comss",
             name = "Comss.one DNS",
@@ -55,6 +76,34 @@ object DnsPresets {
             description = "Ручной ввод собственного IP или DoH адреса"
         )
     )
+
+    @Volatile
+    var list: List<DnsPreset> = defaultPresets
+        private set
+
+    fun updateList(newList: List<DnsPreset>) {
+        if (newList.isNotEmpty()) {
+            list = newList
+        }
+    }
+
+    fun loadFromDisk(context: Context) {
+        try {
+            val file = File(context.filesDir, "dns_providers.json")
+            val json = if (file.exists() && file.length() > 0) {
+                file.readText()
+            } else {
+                context.assets.open("dns_providers.json").bufferedReader().use { it.readText() }
+            }
+            val type = object : TypeToken<List<DnsPreset>>() {}.type
+            val loaded: List<DnsPreset> = Gson().fromJson(json, type)
+            if (loaded.isNotEmpty()) {
+                list = loaded
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load DNS presets from disk", e)
+        }
+    }
 
     fun findById(id: String): DnsPreset = list.find { it.id == id } ?: list.first()
 }

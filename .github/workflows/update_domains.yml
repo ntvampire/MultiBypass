@@ -1,0 +1,37 @@
+name: Update Mobile Domain Lists & Providers
+
+on:
+  schedule:
+    # Run daily at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-lists:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Domain Lists Pipeline
+        run: python scripts/update_domains.py
+
+      - name: Commit and Push Changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ app/src/main/assets/
+          if git diff --staged --quiet; then
+            echo "No changes in domain lists or providers."
+          else
+            git commit -m "chore(lists): automatic daily update of domain lists and providers"
+            git push
+          fi

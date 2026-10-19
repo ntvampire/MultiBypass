@@ -94,6 +94,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.multibypass.app.core.updater.AppUpdateManager.checkAndInstallPendingApk(this)
+    }
+
     private fun requestVpnPermission() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
