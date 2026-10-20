@@ -3,6 +3,10 @@
 gemini.google.com
 bard.google.com
 generativeai.google.com
+generativeai.google
+generativelanguage.googleapis.com
+ai.google.dev
+apis.google.com
 makersuite.google.com
 aistudio.google.com
 proactivebackend-pa.googleapis.com

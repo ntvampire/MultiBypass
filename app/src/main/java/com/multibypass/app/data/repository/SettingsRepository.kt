@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.DnsGroupConfig
 import com.multibypass.app.data.model.TelegramProxyConfig
+import io.github.romanvht.byedpi.core.ByeDpiProxy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,8 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 4
+        private const val CURRENT_DOMAINS_VERSION = 5
+        private const val KEY_BLOCK_QUIC = "key_block_quic"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -59,9 +61,17 @@ class SettingsRepository(private val context: Context) {
     private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
 
+    private val _blockQuic = MutableStateFlow(prefs.getBoolean(KEY_BLOCK_QUIC, true))
+    val blockQuic: StateFlow<Boolean> = _blockQuic.asStateFlow()
+
     init {
         // Enforce watchdog always enabled
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
+
+        // Sync initial QUIC blocker state with native layer
+        try {
+            ByeDpiProxy.setBlockQuic(_blockQuic.value)
+        } catch (_: Exception) {}
 
         // Force-upgrade default domains & default strategy if coming from older versions
         val domainVer = prefs.getInt(KEY_DOMAINS_VERSION, 0)
@@ -102,6 +112,14 @@ class SettingsRepository(private val context: Context) {
     fun setRouteAllApps(enabled: Boolean) {
         _routeAllApps.value = enabled
         prefs.edit().putBoolean(KEY_ROUTE_ALL_APPS, enabled).apply()
+    }
+
+    fun setBlockQuic(enabled: Boolean) {
+        _blockQuic.value = enabled
+        prefs.edit().putBoolean(KEY_BLOCK_QUIC, enabled).apply()
+        try {
+            ByeDpiProxy.setBlockQuic(enabled)
+        } catch (_: Exception) {}
     }
 
     fun updateDnsConfig(config: DnsGroupConfig) {

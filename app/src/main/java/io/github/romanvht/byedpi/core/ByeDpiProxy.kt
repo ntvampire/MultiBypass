@@ -9,4 +9,5 @@ object ByeDpiProxy {
     external fun jniStopProxy(): Int
     external fun jniForceClose(): Int
     external fun setDnsRedirectPort(port: Int)
+    external fun setBlockQuic(block: Boolean)
 }

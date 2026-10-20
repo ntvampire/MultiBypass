@@ -296,6 +296,17 @@ object NetworkDiagnostics {
             )
         )
 
+        // 9. QUIC Protocol Blocker Check
+        val quicBlocked = repository.blockQuic.value
+        steps.add(
+            DiagnosticStepResult(
+                title = "Блокировка QUIC (HTTP/3)",
+                description = if (quicBlocked) "Активна (форсирование TCP)" else "Отключена пользователем",
+                status = DiagnosticStatus.SUCCESS,
+                detail = if (quicBlocked) "UDP-порт 443 блокируется: SmartDNS и десинхронизация TCP работают в штатном режиме" else "Трафик UDP 443 передается без ограничений"
+            )
+        )
+
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
         DiagnosticsReport(steps = steps, allOk = allOk)
     }

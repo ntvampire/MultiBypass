@@ -119,6 +119,9 @@ class MultiBypassVpnService : VpnService() {
                 ByeDpiController.ensureHostsFile(applicationContext)
                 ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                 delay(400)
+                try {
+                    ByeDpiProxy.setBlockQuic(repository.blockQuic.value)
+                } catch (_: Exception) {}
 
                 // 2. Start Telegram WS Proxy if enabled
                 if (tgConfig.enabled && tgConfig.autoStartWithVpn) {
@@ -284,6 +287,10 @@ class MultiBypassVpnService : VpnService() {
                     delay(250)
                     ByeDpiController.ensureHostsFile(applicationContext)
                     ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
+                    delay(250)
+                    try {
+                        ByeDpiProxy.setBlockQuic(repository.blockQuic.value)
+                    } catch (_: Exception) {}
                     ServiceWatchdog.triggerCheck(500)
                     Log.i(TAG, "MultiBypass VPN internal sockets reconnected successfully")
                 } catch (e: Exception) {

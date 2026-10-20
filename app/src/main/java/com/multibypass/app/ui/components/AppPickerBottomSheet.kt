@@ -229,8 +229,17 @@ fun AppPickerBottomSheet(
                                     app = app,
                                     isChecked = currentSelected.contains(app.packageName),
                                     onToggle = {
-                                        if (currentSelected.contains(app.packageName)) currentSelected.remove(app.packageName)
-                                        else currentSelected.add(app.packageName)
+                                        if (currentSelected.contains(app.packageName)) {
+                                            currentSelected.remove(app.packageName)
+                                            if (app.packageName == "com.google.android.apps.bard") {
+                                                currentSelected.remove("com.google.android.googlequicksearchbox")
+                                            }
+                                        } else {
+                                            currentSelected.add(app.packageName)
+                                            if (app.packageName == "com.google.android.apps.bard" && geoblockApps.any { it.packageName == "com.google.android.googlequicksearchbox" }) {
+                                                currentSelected.add("com.google.android.googlequicksearchbox")
+                                            }
+                                        }
                                     },
                                     pm = pm
                                 )
@@ -411,10 +420,15 @@ private fun AppPickerRow(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )
+            val subtext = when (app.packageName) {
+                "com.google.android.googlequicksearchbox" -> "Службы Google и бэкенд Gemini"
+                "com.google.android.apps.bard" -> "Клиент Google Gemini"
+                else -> app.packageName
+            }
             Text(
-                text = app.packageName,
+                text = subtext,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (app.packageName == "com.google.android.googlequicksearchbox" || app.packageName == "com.google.android.apps.bard") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 

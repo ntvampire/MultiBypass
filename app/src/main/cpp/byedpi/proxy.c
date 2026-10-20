@@ -44,6 +44,7 @@
 
 int server_fd;
 int g_dns_redirect_port = 0;
+int g_block_quic = 1;
 
 static void on_cancel(int sig) {
     shutdown(server_fd, SHUT_RDWR);
@@ -790,6 +791,10 @@ int on_udp_tunnel(struct poolhd *pool, struct eval *val, int et)
             if (offs < 0) {
                 LOG(LOG_E, "udp parse error\n");
                 return -1;
+            }
+            if (g_block_quic && ntohs(addr.in.sin_port) == 443) {
+                LOG(LOG_S, "QUIC (UDP 443) dropped by policy\n");
+                continue;
             }
             if (g_dns_redirect_port > 0 && ntohs(addr.in.sin_port) == 53) {
                 pair->orig_addr = addr;
