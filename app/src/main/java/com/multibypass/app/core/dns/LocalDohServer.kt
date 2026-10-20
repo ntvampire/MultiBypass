@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class LocalDohServer(
-    private val port: Int = 5353,
+    private val port: Int = 5354,
     private val dohUrl: String = "https://dns.comss.one/dns-query",
     private val fallbackStandardIp: String = "92.223.109.31"
 ) {
@@ -25,7 +25,11 @@ class LocalDohServer(
 
         private val BOOTSTRAP_HOSTS = mapOf(
             "dns.comss.one" to listOf("92.223.109.31", "94.130.180.225"),
-            "dns.nextdns.io" to listOf("45.90.28.0", "45.90.30.0")
+            "dns.nextdns.io" to listOf("45.90.28.0", "45.90.30.0"),
+            "d.webshiftvpn.ru" to listOf("31.31.207.68"),
+            "dns.zapret.moe" to listOf("83.217.211.149"),
+            "geohide.ru" to listOf("193.233.112.67"),
+            "dns.bezmezhau.com" to listOf("143.20.64.55")
         )
     }
 
@@ -132,6 +136,9 @@ class LocalDohServer(
                 if (response.isSuccessful) {
                     val body = response.body?.bytes()
                     if (body != null && body.size >= 12) {
+                        // Guarantee transaction ID matches client query
+                        body[0] = queryBytes[0]
+                        body[1] = queryBytes[1]
                         cache[queryHash] = Pair(now, body)
                         val respPacket = DatagramPacket(body, body.size, clientAddress, clientPort)
                         s.send(respPacket)
@@ -150,6 +157,8 @@ class LocalDohServer(
             try {
                 val fallbackResp = queryStandardDns(queryBytes, fallbackStandardIp)
                 if (fallbackResp != null && fallbackResp.size >= 12) {
+                    fallbackResp[0] = queryBytes[0]
+                    fallbackResp[1] = queryBytes[1]
                     cache[queryHash] = Pair(now, fallbackResp)
                     val respPacket = DatagramPacket(fallbackResp, fallbackResp.size, clientAddress, clientPort)
                     s.send(respPacket)

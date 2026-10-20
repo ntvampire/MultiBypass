@@ -135,15 +135,15 @@ class MultiBypassVpnService : VpnService() {
                     try {
                         dohServer?.stop()
                         dohServer = LocalDohServer(
-                            port = 5353,
+                            port = 5354,
                             dohUrl = effectiveDns,
                             fallbackStandardIp = fallbackStandardIp
                         ).apply { start() }
-                        ByeDpiProxy.setDnsRedirectPort(5353)
+                        ByeDpiProxy.setDnsRedirectPort(5354)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
                     }
-                    "10.10.10.1"
+                    "198.18.0.2"
                 } else {
                     try {
                         dohServer?.stop()
@@ -166,7 +166,7 @@ class MultiBypassVpnService : VpnService() {
                             PendingIntent.FLAG_IMMUTABLE
                         )
                     )
-                    addAddress("10.10.10.10", 32)
+                    addAddress("198.18.0.1", 32)
                     setupRoutesWithLanBypass(this)
                     addDnsServer(dnsServer)
 
@@ -351,7 +351,7 @@ class MultiBypassVpnService : VpnService() {
                 "172.128.0.0" to 9, "173.0.0.0" to 8, "174.0.0.0" to 7, "176.0.0.0" to 4,
                 "192.0.0.0" to 9, "192.128.0.0" to 11, "192.160.0.0" to 13, "192.169.0.0" to 16,
                 "192.170.0.0" to 15, "192.172.0.0" to 14, "192.176.0.0" to 12, "192.192.0.0" to 10,
-                "193.0.0.0" to 8, "194.0.0.0" to 7, "196.0.0.0" to 6, "200.0.0.0" to 5,
+                "193.0.0.0" to 8, "194.0.0.0" to 7, "196.0.0.0" to 6, "198.18.0.0" to 15, "200.0.0.0" to 5,
                 "208.0.0.0" to 4
             )
             for ((addr, prefix) in nonLanSubnets) {
@@ -362,6 +362,9 @@ class MultiBypassVpnService : VpnService() {
                 }
             }
         }
+        try {
+            builder.addRoute("198.18.0.0", 15)
+        } catch (_: Exception) {}
         try {
             builder.allowBypass()
         } catch (e: Exception) {

@@ -307,6 +307,31 @@ object NetworkDiagnostics {
             )
         )
 
+        // 10. Local DoH Interceptor (127.0.0.1:5354)
+        if (vpnStatus == VpnStatus.CONNECTED && dnsConfig.mode == com.multibypass.app.data.model.DnsMode.DOH) {
+            val localStart = System.currentTimeMillis()
+            val localResolved = testDnsResolution("127.0.0.1", 5354, "gemini.google.com", 2500)
+            val localTime = System.currentTimeMillis() - localStart
+            steps.add(
+                if (localResolved != null) {
+                    DiagnosticStepResult(
+                        title = "Локальный DoH перехватчик (127.0.0.1:5354)",
+                        description = "gemini.google.com -> $localResolved ($localTime мс)",
+                        status = DiagnosticStatus.SUCCESS,
+                        latencyMs = localTime,
+                        detail = "Трансляция SmartDNS для Gemini и Google App функционирует штатно"
+                    )
+                } else {
+                    DiagnosticStepResult(
+                        title = "Локальный DoH перехватчик (127.0.0.1:5354)",
+                        description = "Порт 5354 не ответил",
+                        status = DiagnosticStatus.WARNING,
+                        detail = "Служба LocalDoHServer не завершила обработку DNS запроса"
+                    )
+                }
+            )
+        }
+
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
         DiagnosticsReport(steps = steps, allOk = allOk)
     }
