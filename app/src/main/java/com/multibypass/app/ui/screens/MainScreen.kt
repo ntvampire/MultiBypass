@@ -243,7 +243,16 @@ fun MainScreen(
                         text = if (routeAllApps) {
                             "Глобальный режим: все приложения на устройстве идут через MultiBypass"
                         } else {
-                            "Раздельное туннелирование: ${routedApps.size} выбрано (остальные напрямую)"
+                            val geoCount = routedApps.count { com.multibypass.app.data.model.GEOBLOCK_PACKAGES.contains(it) }
+                            val antiDpiCount = routedApps.count { com.multibypass.app.data.model.ANTIDPI_PACKAGES.contains(it) }
+                            val otherCount = routedApps.size - geoCount - antiDpiCount
+                            val parts = buildList {
+                                if (geoCount > 0) add("$geoCount ИИ/Геоблок")
+                                if (antiDpiCount > 0) add("$antiDpiCount Anti-DPI")
+                                if (otherCount > 0) add("$otherCount других")
+                            }.joinToString(", ")
+                            val detail = if (parts.isNotEmpty()) " ($parts)" else ""
+                            "Раздельная маршрутизация: ${routedApps.size} выбрано$detail. Невыбранные приложения идут напрямую."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary

@@ -9,22 +9,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.multibypass.app.data.model.ANTIDPI_PACKAGES
+import com.multibypass.app.data.model.GEOBLOCK_PACKAGES
+import com.multibypass.app.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-import com.multibypass.app.data.model.POPULAR_PACKAGES
 
 data class InstalledAppItem(
     val name: String,
@@ -75,6 +77,18 @@ fun AppPickerBottomSheet(
         }
     }
 
+    val geoblockApps = remember(appList) {
+        appList.filter { GEOBLOCK_PACKAGES.contains(it.packageName) }
+    }
+
+    val antiDpiApps = remember(appList) {
+        appList.filter { ANTIDPI_PACKAGES.contains(it.packageName) }
+    }
+
+    val otherApps = remember(appList) {
+        appList.filter { !GEOBLOCK_PACKAGES.contains(it.packageName) && !ANTIDPI_PACKAGES.contains(it.packageName) }
+    }
+
     val filteredApps = remember(appList, searchQuery) {
         if (searchQuery.isBlank()) appList
         else appList.filter {
@@ -91,7 +105,7 @@ fun AppPickerBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.9f)
                 .padding(horizontal = 16.dp)
         ) {
             Row(
@@ -130,21 +144,32 @@ fun AppPickerBottomSheet(
             ) {
                 OutlinedButton(
                     onClick = {
-                        val popularInstalled = appList
-                            .filter { POPULAR_PACKAGES.contains(it.packageName) }
-                            .map { it.packageName }
-                        for (pkg in popularInstalled) {
-                            if (!currentSelected.contains(pkg)) {
-                                currentSelected.add(pkg)
-                            }
+                        val allSelected = geoblockApps.isNotEmpty() && geoblockApps.all { currentSelected.contains(it.packageName) }
+                        if (allSelected) {
+                            geoblockApps.forEach { currentSelected.remove(it.packageName) }
+                        } else {
+                            geoblockApps.forEach { if (!currentSelected.contains(it.packageName)) currentSelected.add(it.packageName) }
                         }
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Выбрать популярные", maxLines = 1)
+                    Text("+ ИИ / Геоблок", fontSize = 12.sp, maxLines = 1)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val allSelected = antiDpiApps.isNotEmpty() && antiDpiApps.all { currentSelected.contains(it.packageName) }
+                        if (allSelected) {
+                            antiDpiApps.forEach { currentSelected.remove(it.packageName) }
+                        } else {
+                            antiDpiApps.forEach { if (!currentSelected.contains(it.packageName)) currentSelected.add(it.packageName) }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("+ Медиа / DPI", fontSize = 12.sp, maxLines = 1)
                 }
 
                 if (currentSelected.isNotEmpty()) {
@@ -152,7 +177,7 @@ fun AppPickerBottomSheet(
                         onClick = { currentSelected.clear() },
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Снять все")
+                        Text("Снять все", fontSize = 12.sp)
                     }
                 }
             }
@@ -166,60 +191,112 @@ fun AppPickerBottomSheet(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(filteredApps, key = { it.packageName }) { app ->
-                        val isChecked = currentSelected.contains(app.packageName)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (isChecked) currentSelected.remove(app.packageName)
+                    if (searchQuery.isNotBlank()) {
+                        items(filteredApps, key = { it.packageName }) { app ->
+                            AppPickerRow(
+                                app = app,
+                                isChecked = currentSelected.contains(app.packageName),
+                                onToggle = {
+                                    if (currentSelected.contains(app.packageName)) currentSelected.remove(app.packageName)
                                     else currentSelected.add(app.packageName)
-                                }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val iconBitmap = remember(app.packageName) {
-                                try {
-                                    pm.getApplicationIcon(app.packageName).toBitmap(64, 64).asImageBitmap()
-                                } catch (_: Exception) {
-                                    null
-                                }
-                            }
-
-                            if (iconBitmap != null) {
-                                Image(
-                                    bitmap = iconBitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                            } else {
-                                Box(modifier = Modifier.size(40.dp))
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = app.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = app.packageName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Checkbox(
-                                checked = isChecked,
-                                onCheckedChange = { checked ->
-                                    if (checked) currentSelected.add(app.packageName)
-                                    else currentSelected.remove(app.packageName)
-                                }
+                                },
+                                pm = pm
                             )
+                        }
+                    } else {
+                        // Section 1: Geoblock / AI
+                        if (geoblockApps.isNotEmpty()) {
+                            item(key = "header_geo") {
+                                SectionHeader(
+                                    title = "🌐 Обход геоблокировок (SmartDNS)",
+                                    subtitle = "ChatGPT, Gemini, Claude, Spotify, Canva...",
+                                    color = AccentBlue,
+                                    allChecked = geoblockApps.all { currentSelected.contains(it.packageName) },
+                                    onToggleAll = {
+                                        val allSel = geoblockApps.all { currentSelected.contains(it.packageName) }
+                                        if (allSel) {
+                                            geoblockApps.forEach { currentSelected.remove(it.packageName) }
+                                        } else {
+                                            geoblockApps.forEach { if (!currentSelected.contains(it.packageName)) currentSelected.add(it.packageName) }
+                                        }
+                                    }
+                                )
+                            }
+                            items(geoblockApps, key = { it.packageName }) { app ->
+                                AppPickerRow(
+                                    app = app,
+                                    isChecked = currentSelected.contains(app.packageName),
+                                    onToggle = {
+                                        if (currentSelected.contains(app.packageName)) currentSelected.remove(app.packageName)
+                                        else currentSelected.add(app.packageName)
+                                    },
+                                    pm = pm
+                                )
+                            }
+                        }
+
+                        // Section 2: Anti-DPI
+                        if (antiDpiApps.isNotEmpty()) {
+                            item(key = "header_antidpi") {
+                                SectionHeader(
+                                    title = "🛡️ Обход замедлений и ТСПУ (Anti-DPI)",
+                                    subtitle = "YouTube, Instagram, Discord, X/Twitter, Telegram...",
+                                    color = GreenPrimary,
+                                    allChecked = antiDpiApps.all { currentSelected.contains(it.packageName) },
+                                    onToggleAll = {
+                                        val allSel = antiDpiApps.all { currentSelected.contains(it.packageName) }
+                                        if (allSel) {
+                                            antiDpiApps.forEach { currentSelected.remove(it.packageName) }
+                                        } else {
+                                            antiDpiApps.forEach { if (!currentSelected.contains(it.packageName)) currentSelected.add(it.packageName) }
+                                        }
+                                    }
+                                )
+                            }
+                            items(antiDpiApps, key = { it.packageName }) { app ->
+                                AppPickerRow(
+                                    app = app,
+                                    isChecked = currentSelected.contains(app.packageName),
+                                    onToggle = {
+                                        if (currentSelected.contains(app.packageName)) currentSelected.remove(app.packageName)
+                                        else currentSelected.add(app.packageName)
+                                    },
+                                    pm = pm
+                                )
+                            }
+                        }
+
+                        // Section 3: Other installed apps
+                        if (otherApps.isNotEmpty()) {
+                            item(key = "header_other") {
+                                SectionHeader(
+                                    title = "📱 Другие установленные приложения",
+                                    subtitle = "Остальные приложения на устройстве (${otherApps.size})",
+                                    color = TextSecondary,
+                                    allChecked = otherApps.all { currentSelected.contains(it.packageName) },
+                                    onToggleAll = {
+                                        val allSel = otherApps.all { currentSelected.contains(it.packageName) }
+                                        if (allSel) {
+                                            otherApps.forEach { currentSelected.remove(it.packageName) }
+                                        } else {
+                                            otherApps.forEach { if (!currentSelected.contains(it.packageName)) currentSelected.add(it.packageName) }
+                                        }
+                                    }
+                                )
+                            }
+                            items(otherApps, key = { it.packageName }) { app ->
+                                AppPickerRow(
+                                    app = app,
+                                    isChecked = currentSelected.contains(app.packageName),
+                                    onToggle = {
+                                        if (currentSelected.contains(app.packageName)) currentSelected.remove(app.packageName)
+                                        else currentSelected.add(app.packageName)
+                                    },
+                                    pm = pm
+                                )
+                            }
                         }
                     }
                 }
@@ -242,5 +319,108 @@ fun AppPickerBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    subtitle: String,
+    color: Color,
+    allChecked: Boolean,
+    onToggleAll: () -> Unit
+) {
+    Surface(
+        color = DarkSurfaceVariant,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+            }
+            TextButton(
+                onClick = onToggleAll,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Text(
+                    text = if (allChecked) "Снять" else "Выбрать все",
+                    fontSize = 11.sp,
+                    color = color
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppPickerRow(
+    app: InstalledAppItem,
+    isChecked: Boolean,
+    onToggle: () -> Unit,
+    pm: PackageManager
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val iconBitmap = remember(app.packageName) {
+            try {
+                pm.getApplicationIcon(app.packageName).toBitmap(64, 64).asImageBitmap()
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        if (iconBitmap != null) {
+            Image(
+                bitmap = iconBitmap,
+                contentDescription = null,
+                modifier = Modifier.size(38.dp)
+            )
+        } else {
+            Box(modifier = Modifier.size(38.dp))
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = app.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = app.packageName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Checkbox(
+            checked = isChecked,
+            onCheckedChange = { onToggle() }
+        )
     }
 }

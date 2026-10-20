@@ -115,7 +115,8 @@ class MultiBypassVpnService : VpnService() {
                 val antiDpiConfig = repository.antiDpiConfig.value
                 val tgConfig = repository.tgConfig.value
 
-                // 1. Start ByeByeDPI daemon on port 1080
+                // 1. Start ByeByeDPI daemon on port 1080 with clean anti-DPI hosts whitelist
+                ByeDpiController.ensureHostsFile(applicationContext)
                 ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                 delay(400)
 
@@ -166,9 +167,11 @@ class MultiBypassVpnService : VpnService() {
                     setupRoutesWithLanBypass(this)
                     addDnsServer(dnsServer)
 
+                    allowBypass()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         setMetered(false)
                     }
+                    setUnderlyingNetworks(null)
 
                     // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
@@ -279,6 +282,7 @@ class MultiBypassVpnService : VpnService() {
                     val antiDpiConfig = repository.antiDpiConfig.value
                     ByeDpiController.stop()
                     delay(250)
+                    ByeDpiController.ensureHostsFile(applicationContext)
                     ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                     ServiceWatchdog.triggerCheck(500)
                     Log.i(TAG, "MultiBypass VPN internal sockets reconnected successfully")

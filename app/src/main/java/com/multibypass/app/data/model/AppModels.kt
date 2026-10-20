@@ -183,25 +183,31 @@ data class StrategyTestResult(
     val serviceLatencies: Map<String, Long> = emptyMap()
 )
 
-val POPULAR_PACKAGES = setOf(
-    "com.google.android.youtube",
-    "app.revanced.android.youtube",
-    "com.vanced.android.youtube",
-    "com.discord",
-    "org.telegram.messenger",
-    "org.telegram.messenger.web",
-    "org.telegram.plus",
+val GEOBLOCK_PACKAGES = setOf(
     "com.openai.chatgpt",
+    "com.google.android.apps.bard",
     "ai.anthropic.claudeforandroid",
     "ai.perplexity.app.android",
     "com.spotify.music",
     "notion.id",
-    "com.canva.editor",
+    "com.canva.editor"
+)
+
+val ANTIDPI_PACKAGES = setOf(
+    "com.google.android.youtube",
+    "app.revanced.android.youtube",
+    "com.vanced.android.youtube",
+    "com.discord",
     "com.instagram.android",
     "com.instagram.barcelona",
     "com.facebook.katana",
     "com.facebook.orca",
     "com.twitter.android",
+    "org.telegram.messenger",
+    "org.telegram.messenger.web",
+    "org.telegram.plus",
     "org.thoughtcrime.securesms",
     "com.zhiliaoapp.musically"
 )
+
+val POPULAR_PACKAGES = GEOBLOCK_PACKAGES + ANTIDPI_PACKAGES

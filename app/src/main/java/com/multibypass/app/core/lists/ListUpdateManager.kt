@@ -54,6 +54,7 @@ object ListUpdateManager {
                 if (antiDpiDomains.isNotEmpty()) {
                     antiDpiCount = antiDpiDomains.size
                     File(context.filesDir, "domains_antidpi.txt").writeText(antiDpiContent)
+                    com.multibypass.app.core.byedpi.ByeDpiController.ensureHostsFile(context)
                     repo.updateAntiDpiConfig(repo.antiDpiConfig.value.copy(domains = antiDpiDomains))
                 }
             }

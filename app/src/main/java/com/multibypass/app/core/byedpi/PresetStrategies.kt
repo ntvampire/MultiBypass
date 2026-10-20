@@ -102,6 +102,7 @@ class StrategyTester(private val context: Context) {
             val repository = SettingsRepository.getInstance(context)
             val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
             val originalStrategy = repository.antiDpiConfig.value.strategy
+            ByeDpiController.ensureHostsFile(context)
 
             var bestResult: StrategyTestResult? = null
 

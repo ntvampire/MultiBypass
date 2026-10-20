@@ -13,18 +13,44 @@ object ByeDpiController {
     private const val TAG = "ByeDpiController"
     const val DEFAULT_PORT = 1080
 
+    @Volatile
+    var hostsFilePath: String? = null
+
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
     private val lock = Mutex()
     private var proxyJob: Job? = null
 
+    fun ensureHostsFile(context: android.content.Context): String? {
+        return try {
+            val targetFile = java.io.File(context.filesDir, "domains_antidpi_clean.txt")
+            val srcFile = java.io.File(context.filesDir, "domains_antidpi.txt")
+            val content = if (srcFile.exists() && srcFile.length() > 0) {
+                srcFile.readText()
+            } else {
+                context.assets.open("domains_antidpi.txt").bufferedReader().use { it.readText() }
+            }
+            val cleanDomains = content.lines()
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+            targetFile.writeText(cleanDomains.joinToString("\n"))
+            hostsFilePath = targetFile.absolutePath
+            Log.i(TAG, "Prepared clean anti-DPI hosts file: ${targetFile.absolutePath} (${cleanDomains.size} domains)")
+            targetFile.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to prepare hosts file", e)
+            null
+        }
+    }
+
     suspend fun start(strategy: String = "-o1 -r-5+se -a1", port: Int = DEFAULT_PORT) {
         lock.withLock {
             stopLocked()
             delay(150)
 
-            val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy"
+            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\"" else ""
+            val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy$hostsArg"
             val args = parseArgs(fullCmd)
 
             proxyJob = CoroutineScope(Dispatchers.IO).launch {
