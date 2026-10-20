@@ -233,11 +233,17 @@ fun AppPickerBottomSheet(
                                             currentSelected.remove(app.packageName)
                                             if (app.packageName == "com.google.android.apps.bard") {
                                                 currentSelected.remove("com.google.android.googlequicksearchbox")
+                                                currentSelected.remove("com.google.android.gms")
                                             }
                                         } else {
                                             currentSelected.add(app.packageName)
-                                            if (app.packageName == "com.google.android.apps.bard" && geoblockApps.any { it.packageName == "com.google.android.googlequicksearchbox" }) {
-                                                currentSelected.add("com.google.android.googlequicksearchbox")
+                                            if (app.packageName == "com.google.android.apps.bard") {
+                                                if (geoblockApps.any { it.packageName == "com.google.android.googlequicksearchbox" }) {
+                                                    currentSelected.add("com.google.android.googlequicksearchbox")
+                                                }
+                                                if (geoblockApps.any { it.packageName == "com.google.android.gms" }) {
+                                                    currentSelected.add("com.google.android.gms")
+                                                }
                                             }
                                         }
                                     },
@@ -422,13 +428,14 @@ private fun AppPickerRow(
             )
             val subtext = when (app.packageName) {
                 "com.google.android.googlequicksearchbox" -> "Службы Google и бэкенд Gemini"
+                "com.google.android.gms" -> "Службы Google Play (авторизация Gemini)"
                 "com.google.android.apps.bard" -> "Клиент Google Gemini"
                 else -> app.packageName
             }
             Text(
                 text = subtext,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (app.packageName == "com.google.android.googlequicksearchbox" || app.packageName == "com.google.android.apps.bard") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (app.packageName == "com.google.android.googlequicksearchbox" || app.packageName == "com.google.android.apps.bard" || app.packageName == "com.google.android.gms") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 

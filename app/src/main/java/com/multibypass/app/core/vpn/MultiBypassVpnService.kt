@@ -4,6 +4,10 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -13,10 +17,8 @@ import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
-import com.multibypass.app.core.dns.LocalDohServer
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.watchdog.ServiceWatchdog
-import com.multibypass.app.data.model.DnsMode
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
@@ -73,8 +75,9 @@ class MultiBypassVpnService : VpnService() {
     }
 
     private var tunFd: ParcelFileDescriptor? = null
-    private var dohServer: LocalDohServer? = null
-    private val vpnMutex = kotlinx.coroutines.sync.Mutex()
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val vpnMutex = Mutex()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -120,7 +123,8 @@ class MultiBypassVpnService : VpnService() {
                 ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                 delay(400)
                 try {
-                    ByeDpiProxy.setBlockQuic(repository.blockQuic.value)
+                    ByeDpiProxy.setBlockQuic(false)
+                    ByeDpiProxy.setDnsRedirectPort(0)
                 } catch (_: Exception) {}
 
                 // 2. Start Telegram WS Proxy if enabled
@@ -128,30 +132,10 @@ class MultiBypassVpnService : VpnService() {
                     TelegramProxyService.start(applicationContext)
                 }
 
-                // 3. Configure DNS & Local DoH Server
-                val effectiveDns = dnsConfig.getEffectiveDns()
-                val fallbackStandardIp = dnsConfig.getEffectiveStandardIp()
-                val dnsServer = if (dnsConfig.mode == DnsMode.DOH) {
-                    try {
-                        dohServer?.stop()
-                        dohServer = LocalDohServer(
-                            port = 5354,
-                            dohUrl = effectiveDns,
-                            fallbackStandardIp = fallbackStandardIp
-                        ).apply { start() }
-                        ByeDpiProxy.setDnsRedirectPort(5354)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error starting LocalDoHServer: ${e.message}", e)
-                    }
-                    "198.18.0.2"
-                } else {
-                    try {
-                        dohServer?.stop()
-                        dohServer = null
-                        ByeDpiProxy.setDnsRedirectPort(0)
-                    } catch (_: Exception) {}
-                    effectiveDns
-                }
+                // 3. Direct SmartDNS (like OpenWrt / v1.2.1)
+                // Real SmartDNS IP (e.g. 92.223.109.31 for Comss, 83.217.211.149 for Zapret)
+                // Traffic to port 53 UDP goes directly through SOCKS5 tunnel without local proxy overhead
+                val effectiveDns = dnsConfig.getEffectiveStandardIp()
 
                 val routeAll = repository.routeAllApps.value
                 val allowedApps = repository.routedApps.value
@@ -166,15 +150,15 @@ class MultiBypassVpnService : VpnService() {
                             PendingIntent.FLAG_IMMUTABLE
                         )
                     )
-                    addAddress("198.18.0.1", 32)
+                    addAddress("10.10.10.10", 32)
+                    setMtu(1500)
                     setupRoutesWithLanBypass(this)
-                    addDnsServer(dnsServer)
+                    addDnsServer(effectiveDns)
 
                     allowBypass()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         setMetered(false)
                     }
-                    setUnderlyingNetworks(null)
 
                     // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
@@ -202,7 +186,7 @@ class MultiBypassVpnService : VpnService() {
                 // 4. Create hev-socks5-tunnel config and start tunnel
                 val tunConfig = buildString {
                     appendLine("tunnel:")
-                    appendLine("  mtu: 8500")
+                    appendLine("  mtu: 1500")
                     appendLine("misc:")
                     appendLine("  task-stack-size: 81920")
                     appendLine("socks5:")
@@ -217,8 +201,11 @@ class MultiBypassVpnService : VpnService() {
 
                 TProxyService.TProxyStartService(configFile.absolutePath, fd.fd)
 
+                // 5. Register dynamic underlying network tracking (Wi-Fi <-> LTE seamless migration)
+                registerNetworkTracking()
+
                 _vpnStatus.value = VpnStatus.CONNECTED
-                Log.i(TAG, "MultiBypass VPN connected successfully")
+                Log.i(TAG, "MultiBypass VPN connected successfully (SmartDNS: $effectiveDns:53)")
                 ServiceWatchdog.triggerCheck(1000)
 
             } catch (e: Exception) {
@@ -234,6 +221,8 @@ class MultiBypassVpnService : VpnService() {
 
         serviceScope.launch {
             vpnMutex.withLock {
+                unregisterNetworkTracking()
+
                 try {
                     TProxyService.TProxyStopService()
                 } catch (e: Exception) {
@@ -254,12 +243,9 @@ class MultiBypassVpnService : VpnService() {
                 }
 
                 try {
-                    dohServer?.stop()
-                    dohServer = null
                     ByeDpiProxy.setDnsRedirectPort(0)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error stopping Local DoH Server", e)
-                }
+                    ByeDpiProxy.setBlockQuic(false)
+                } catch (_: Exception) {}
 
                 val repository = SettingsRepository.getInstance(applicationContext)
                 if (repository.tgConfig.value.autoStartWithVpn) {
@@ -289,7 +275,8 @@ class MultiBypassVpnService : VpnService() {
                     ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                     delay(250)
                     try {
-                        ByeDpiProxy.setBlockQuic(repository.blockQuic.value)
+                        ByeDpiProxy.setBlockQuic(false)
+                        ByeDpiProxy.setDnsRedirectPort(0)
                     } catch (_: Exception) {}
                     ServiceWatchdog.triggerCheck(500)
                     Log.i(TAG, "MultiBypass VPN internal sockets reconnected successfully")
@@ -298,6 +285,54 @@ class MultiBypassVpnService : VpnService() {
                 }
             }
         }
+    }
+
+    private fun registerNetworkTracking() {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+            connectivityManager = cm
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.i(TAG, "Active underlying network changed to: $network")
+                    setUnderlyingNetworks(arrayOf(network))
+                }
+
+                override fun onLost(network: Network) {
+                    Log.i(TAG, "Active underlying network lost: $network")
+                    val active = cm.activeNetwork
+                    if (active != null) {
+                        setUnderlyingNetworks(arrayOf(active))
+                    } else {
+                        setUnderlyingNetworks(null)
+                    }
+                }
+
+                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                    if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                        setUnderlyingNetworks(arrayOf(network))
+                    }
+                }
+            }
+            cm.registerNetworkCallback(request, networkCallback!!)
+            val initialNet = cm.activeNetwork
+            if (initialNet != null) {
+                setUnderlyingNetworks(arrayOf(initialNet))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register network tracking: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkTracking() {
+        try {
+            networkCallback?.let { connectivityManager?.unregisterNetworkCallback(it) }
+        } catch (_: Exception) {}
+        networkCallback = null
+        connectivityManager = null
     }
 
     override fun onDestroy() {
@@ -335,9 +370,9 @@ class MultiBypassVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             builder.addRoute("0.0.0.0", 0)
             try {
-                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("10.0.0.0"), 8))
-                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("172.16.0.0"), 12))
+                // Exclude private home/office LANs without excluding 10.0.0.0/8 (which contains the VPN TUN address 10.10.10.10)
                 builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("192.168.0.0"), 16))
+                builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("172.16.0.0"), 12))
                 builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("169.254.0.0"), 16))
             } catch (e: Exception) {
                 Log.w(TAG, "excludeRoute failed, falling back to 0.0.0.0/0", e)
@@ -351,7 +386,7 @@ class MultiBypassVpnService : VpnService() {
                 "172.128.0.0" to 9, "173.0.0.0" to 8, "174.0.0.0" to 7, "176.0.0.0" to 4,
                 "192.0.0.0" to 9, "192.128.0.0" to 11, "192.160.0.0" to 13, "192.169.0.0" to 16,
                 "192.170.0.0" to 15, "192.172.0.0" to 14, "192.176.0.0" to 12, "192.192.0.0" to 10,
-                "193.0.0.0" to 8, "194.0.0.0" to 7, "196.0.0.0" to 6, "198.18.0.0" to 15, "200.0.0.0" to 5,
+                "193.0.0.0" to 8, "194.0.0.0" to 7, "196.0.0.0" to 6, "200.0.0.0" to 5,
                 "208.0.0.0" to 4
             )
             for ((addr, prefix) in nonLanSubnets) {
@@ -361,14 +396,6 @@ class MultiBypassVpnService : VpnService() {
                     Log.w(TAG, "Failed to add route $addr/$prefix", e)
                 }
             }
-        }
-        try {
-            builder.addRoute("198.18.0.0", 15)
-        } catch (_: Exception) {}
-        try {
-            builder.allowBypass()
-        } catch (e: Exception) {
-            Log.w(TAG, "allowBypass failed", e)
         }
     }
 }

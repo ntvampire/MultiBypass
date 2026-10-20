@@ -44,7 +44,7 @@
 
 int server_fd;
 int g_dns_redirect_port = 0;
-int g_block_quic = 1;
+int g_block_quic = 0;
 
 static void on_cancel(int sig) {
     shutdown(server_fd, SHUT_RDWR);

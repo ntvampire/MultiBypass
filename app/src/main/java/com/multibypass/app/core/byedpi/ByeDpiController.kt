@@ -49,8 +49,8 @@ object ByeDpiController {
             stopLocked()
             delay(150)
 
-            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\"" else ""
-            val fullCmd = "ciadpi -i 127.0.0.1 -p $port $strategy$hostsArg"
+            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $strategy --auto=none" else " $strategy"
+            val fullCmd = "ciadpi -i 127.0.0.1 -p $port$hostsArg"
             val args = parseArgs(fullCmd)
 
             proxyJob = CoroutineScope(Dispatchers.IO).launch {

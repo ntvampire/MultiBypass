@@ -296,41 +296,39 @@ object NetworkDiagnostics {
             )
         )
 
-        // 9. QUIC Protocol Blocker Check
+        // 9. QUIC Protocol Check
         val quicBlocked = repository.blockQuic.value
         steps.add(
             DiagnosticStepResult(
-                title = "Блокировка QUIC (HTTP/3)",
-                description = if (quicBlocked) "Активна (форсирование TCP)" else "Отключена пользователем",
+                title = "Протокол QUIC (HTTP/3)",
+                description = if (quicBlocked) "Блокируется (форсирование TCP)" else "Разрешен (прозрачный режим OpenWrt)",
                 status = DiagnosticStatus.SUCCESS,
-                detail = if (quicBlocked) "UDP-порт 443 блокируется: SmartDNS и десинхронизация TCP работают в штатном режиме" else "Трафик UDP 443 передается без ограничений"
+                detail = if (quicBlocked) "UDP 443 блокируется принудительно" else "UDP 443 передается прозрачно, без задержек превью YouTube"
             )
         )
 
-        // 10. Local DoH Interceptor (127.0.0.1:5354)
-        if (vpnStatus == VpnStatus.CONNECTED && dnsConfig.mode == com.multibypass.app.data.model.DnsMode.DOH) {
-            val localStart = System.currentTimeMillis()
-            val localResolved = testDnsResolution("127.0.0.1", 5354, "gemini.google.com", 2500)
-            val localTime = System.currentTimeMillis() - localStart
-            steps.add(
-                if (localResolved != null) {
-                    DiagnosticStepResult(
-                        title = "Локальный DoH перехватчик (127.0.0.1:5354)",
-                        description = "gemini.google.com -> $localResolved ($localTime мс)",
-                        status = DiagnosticStatus.SUCCESS,
-                        latencyMs = localTime,
-                        detail = "Трансляция SmartDNS для Gemini и Google App функционирует штатно"
-                    )
-                } else {
-                    DiagnosticStepResult(
-                        title = "Локальный DoH перехватчик (127.0.0.1:5354)",
-                        description = "Порт 5354 не ответил",
-                        status = DiagnosticStatus.WARNING,
-                        detail = "Служба LocalDoHServer не завершила обработку DNS запроса"
-                    )
-                }
-            )
-        }
+        // 10. Direct SmartDNS for Gemini Check
+        val geminiStart = System.currentTimeMillis()
+        val geminiResolved = testDnsResolution(standardIp, 53, "gemini.google.com", 2500)
+        val geminiTime = System.currentTimeMillis() - geminiStart
+        steps.add(
+            if (geminiResolved != null) {
+                DiagnosticStepResult(
+                    title = "SmartDNS: Gemini и сервисы Google",
+                    description = "gemini.google.com -> $geminiResolved ($geminiTime мс)",
+                    status = DiagnosticStatus.SUCCESS,
+                    latencyMs = geminiTime,
+                    detail = "SmartDNS перенаправляет запросы Gemini на европейский прокси"
+                )
+            } else {
+                DiagnosticStepResult(
+                    title = "SmartDNS: Gemini и сервисы Google",
+                    description = "gemini.google.com не ответил",
+                    status = DiagnosticStatus.WARNING,
+                    detail = "Проверьте выбранный DNS-сервер ($standardIp:53)"
+                )
+            }
+        )
 
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
         DiagnosticsReport(steps = steps, allOk = allOk)

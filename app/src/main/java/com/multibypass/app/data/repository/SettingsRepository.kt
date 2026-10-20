@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 5
+        private const val CURRENT_DOMAINS_VERSION = 6
         private const val KEY_BLOCK_QUIC = "key_block_quic"
 
         @Volatile
@@ -61,7 +61,7 @@ class SettingsRepository(private val context: Context) {
     private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
 
-    private val _blockQuic = MutableStateFlow(prefs.getBoolean(KEY_BLOCK_QUIC, true))
+    private val _blockQuic = MutableStateFlow(prefs.getBoolean(KEY_BLOCK_QUIC, false))
     val blockQuic: StateFlow<Boolean> = _blockQuic.asStateFlow()
 
     init {
@@ -95,6 +95,12 @@ class SettingsRepository(private val context: Context) {
                 strategy = newStrategy
             )
             updateAntiDpiConfig(newAntiDpi)
+            setBlockQuic(false)
+            val currentRouted = _routedApps.value.toMutableList()
+            if (currentRouted.contains("com.google.android.apps.bard") && !currentRouted.contains("com.google.android.gms")) {
+                currentRouted.add("com.google.android.gms")
+                updateRoutedApps(currentRouted.distinct())
+            }
 
             prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()
         }
