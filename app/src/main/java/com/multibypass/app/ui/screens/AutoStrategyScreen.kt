@@ -99,13 +99,13 @@ fun AutoStrategyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        listOf("YouTube", "Instagram", "Facebook").forEach { serviceName ->
+                        com.multibypass.app.core.byedpi.PresetStrategies.defaultTestTargets.forEach { target ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = DarkSurfaceVariant
                             ) {
                                 Text(
-                                    text = serviceName,
+                                    text = target.name,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -194,12 +194,13 @@ fun AutoStrategyScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             res.workingServices.forEach { sName ->
+                                                val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
                                                     color = GreenPrimary.copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "$sName ✓",
+                                                        text = "$sName$sLat",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = GreenPrimary,
                                                         fontSize = 10.sp,

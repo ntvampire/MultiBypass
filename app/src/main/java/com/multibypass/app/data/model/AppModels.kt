@@ -179,7 +179,8 @@ data class StrategyTestResult(
     val latencyMs: Long,
     val testedSitesCount: Int,
     val successfulSitesCount: Int,
-    val workingServices: List<String> = emptyList()
+    val workingServices: List<String> = emptyList(),
+    val serviceLatencies: Map<String, Long> = emptyMap()
 )
 
 val POPULAR_PACKAGES = setOf(
