@@ -77,6 +77,7 @@ fun SettingsScreen(
     var updateStatusMessage by remember { mutableStateOf<String?>(null) }
     var isUpdatingLists by remember { mutableStateOf(false) }
     var listsUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
+    var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -315,6 +316,51 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Network Doctor Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.HealthAndSafety,
+                            contentDescription = null,
+                            tint = GreenPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Сетевой доктор", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Экспресс-диагностика VPN, ByeByeDPI, SmartDNS и прокси",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { showDiagnosticsDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Запустить диагностику")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // About Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -373,6 +419,12 @@ fun SettingsScreen(
                     Text("Позже")
                 }
             }
+        )
+    }
+
+    if (showDiagnosticsDialog) {
+        com.multibypass.app.ui.components.DiagnosticsDialog(
+            onDismissRequest = { showDiagnosticsDialog = false }
         )
     }
 }
