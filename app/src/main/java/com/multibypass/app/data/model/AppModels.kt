@@ -17,7 +17,7 @@ data class DnsPreset(
 data class DnsGroupConfig(
     val mode: DnsMode = DnsMode.DOH,
     val presetId: String = "comss",
-    val customStandardIp: String = "92.223.109.31",
+    val customStandardIp: String = "195.133.25.16",
     val customDohUrl: String = "https://dns.comss.one/dns-query",
     val nextDnsProfileId: String = "",
     val domains: List<String> = listOf(
@@ -80,18 +80,18 @@ data class DnsGroupConfig(
                     return preset.dohUrl
                 }
                 when (presetId) {
-                    "webshift" -> "https://d.webshiftvpn.ru/dns-query"
+                    "webshift" -> "https://dns.comss.one/dns-query"
                     "zapret" -> "https://dns.zapret.moe/dns-query"
                     "comss" -> "https://dns.comss.one/dns-query"
                     "geohide" -> "https://geohide.ru/dns-query"
                     "bezmezhau" -> "https://dns.bezmezhau.com/dns-query"
                     "xbox" -> "https://dns.comss.one/dns-query"
-                    "dns_ai" -> "https://dns.comss.one/dns-query"
+                    "dns_ai" -> "https://dns.dns-ai.ru/dns-query"
                     "nextdns" -> {
                         val profile = nextDnsProfileId.trim().ifBlank { "dns" }
                         "https://dns.nextdns.io/$profile"
                     }
-                    else -> customDohUrl.ifBlank { "https://d.webshiftvpn.ru/dns-query" }
+                    else -> customDohUrl.ifBlank { "https://dns.comss.one/dns-query" }
                 }
             }
         }
@@ -105,13 +105,13 @@ data class DnsGroupConfig(
         return when (presetId) {
             "webshift" -> "31.31.207.68"
             "zapret" -> "83.217.211.149"
-            "comss" -> "92.223.109.31"
+            "comss" -> "195.133.25.16"
             "geohide" -> "193.233.112.67"
             "bezmezhau" -> "143.20.64.55"
             "xbox" -> "185.51.200.2"
-            "dns_ai" -> "92.223.109.31"
+            "dns_ai" -> "45.151.102.219"
             "nextdns" -> "45.90.28.0"
-            else -> customStandardIp.ifBlank { "31.31.207.68" }
+            else -> customStandardIp.ifBlank { "195.133.25.16" }
         }
     }
 }

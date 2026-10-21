@@ -12,53 +12,25 @@ object DnsPresets {
 
     private val defaultPresets = listOf(
         DnsPreset(
-            id = "webshift",
-            name = "WebShift DNS",
-            standardIp = "31.31.207.68",
-            dohUrl = "https://d.webshiftvpn.ru/dns-query",
-            description = "SmartDNS: ChatGPT, Gemini, Claude, Copilot, Xbox, Notion (400+ сервисов)"
-        ),
-        DnsPreset(
-            id = "zapret",
-            name = "Zapret DNS",
-            standardIp = "83.217.211.149",
-            dohUrl = "https://dns.zapret.moe/dns-query",
-            description = "SmartDNS: ChatGPT, Claude, Spotify и обход гео-блокировок"
-        ),
-        DnsPreset(
             id = "comss",
             name = "Comss.one DNS",
-            standardIp = "92.223.109.31",
+            standardIp = "195.133.25.16",
             dohUrl = "https://dns.comss.one/dns-query",
-            description = "SmartDNS: ChatGPT, Claude, Copilot, Spotify, Xbox, Canva, Notion"
-        ),
-        DnsPreset(
-            id = "geohide",
-            name = "GeoHide DNS",
-            standardIp = "193.233.112.67",
-            dohUrl = "https://geohide.ru/dns-query",
-            description = "SmartDNS: обход гео-блокировок зарубежных сервисов и ИИ (Россия)"
-        ),
-        DnsPreset(
-            id = "bezmezhau",
-            name = "BezMezhAU DNS",
-            standardIp = "143.20.64.55",
-            dohUrl = "https://dns.bezmezhau.com/dns-query",
-            description = "SmartDNS: обход санкций и блокировок ChatGPT/Spotify/YouTube (Беларусь/РФ)"
-        ),
-        DnsPreset(
-            id = "xbox",
-            name = "Xbox / Microsoft DNS",
-            standardIp = "185.51.200.2",
-            dohUrl = "https://dns.comss.one/dns-query",
-            description = "Специализированный DNS для Xbox Live, Microsoft Store и сетевых игр"
+            description = "SmartDNS: Gemini, ChatGPT, Claude, Spotify, Canva, Notion, Xbox"
         ),
         DnsPreset(
             id = "dns_ai",
             name = "DNS-AI",
-            standardIp = "92.223.109.31",
+            standardIp = "45.151.102.219",
+            dohUrl = "https://dns.dns-ai.ru/dns-query",
+            description = "Скоростной DoH/DoT для ИИ-сервисов (Gemini, ChatGPT, Claude)"
+        ),
+        DnsPreset(
+            id = "webshift",
+            name = "WebShift DNS",
+            standardIp = "31.31.207.68",
             dohUrl = "https://dns.comss.one/dns-query",
-            description = "Оптимизация доступа к ИИ: OpenAI ChatGPT, Anthropic Claude, Midjourney"
+            description = "Быстрый SmartDNS (UDP 53) для Gemini и 400+ зарубежных сервисов"
         ),
         DnsPreset(
             id = "nextdns",
@@ -90,7 +62,7 @@ object DnsPresets {
     fun loadFromDisk(context: Context) {
         try {
             val file = File(context.filesDir, "dns_providers.json")
-            val json = if (file.exists() && file.length() > 0) {
+            val json = if (file.exists()) {
                 file.readText()
             } else {
                 context.assets.open("dns_providers.json").bufferedReader().use { it.readText() }
@@ -99,9 +71,11 @@ object DnsPresets {
             val loaded: List<DnsPreset> = Gson().fromJson(json, type)
             if (loaded.isNotEmpty()) {
                 list = loaded
+                Log.i(TAG, "Loaded ${loaded.size} DNS providers")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load DNS presets from disk", e)
+            Log.w(TAG, "Failed to load DNS providers, using defaults: ${e.message}")
+            list = defaultPresets
         }
     }
 

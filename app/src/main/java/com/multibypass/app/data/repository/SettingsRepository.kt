@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 6
+        private const val CURRENT_DOMAINS_VERSION = 7
         private const val KEY_BLOCK_QUIC = "key_block_quic"
 
         @Volatile
@@ -79,7 +79,18 @@ class SettingsRepository(private val context: Context) {
             val defaultDns = DnsGroupConfig()
             val currentDns = _dnsConfig.value
             val mergedDnsDomains = (defaultDns.domains + currentDns.domains).distinct()
-            val newDns = currentDns.copy(domains = mergedDnsDomains)
+            val validPresetIds = setOf("comss", "dns_ai", "webshift", "nextdns", "custom")
+            val newPresetId = if (currentDns.presetId in validPresetIds) currentDns.presetId else "comss"
+            val newStandardIp = if (currentDns.customStandardIp == "92.223.109.31" || currentDns.customStandardIp.isBlank()) {
+                "195.133.25.16"
+            } else {
+                currentDns.customStandardIp
+            }
+            val newDns = currentDns.copy(
+                domains = mergedDnsDomains,
+                presetId = newPresetId,
+                customStandardIp = newStandardIp
+            )
             updateDnsConfig(newDns)
 
             val defaultAntiDpi = AntiDpiGroupConfig()
