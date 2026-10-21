@@ -54,7 +54,12 @@ jobs:
 
           if [ -f "RELEASE_NOTES.md" ]; then
             echo "### 📝 Изменения:" >> release_notes.md
-            cat RELEASE_NOTES.md >> release_notes.md
+            NOTES=$(awk -v tag="### 🌟 Обновление $TAG:" '$0 ~ tag {flag=1; next} flag && /^---/ {exit} flag {print}' RELEASE_NOTES.md)
+            if [ -n "$NOTES" ]; then
+              echo "$NOTES" >> release_notes.md
+            else
+              awk 'BEGIN{p=0} /^### 🌟/{if(p) exit; p=1} /^---/{if(p) exit} p{print}' RELEASE_NOTES.md >> release_notes.md
+            fi
             echo "" >> release_notes.md
           fi
 
