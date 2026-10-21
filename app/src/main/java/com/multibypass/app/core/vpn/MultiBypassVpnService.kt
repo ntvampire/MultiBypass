@@ -123,7 +123,6 @@ class MultiBypassVpnService : VpnService() {
                 ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                 delay(400)
                 try {
-                    ByeDpiProxy.setBlockQuic(false)
                     ByeDpiProxy.setDnsRedirectPort(0)
                 } catch (_: Exception) {}
 
@@ -244,7 +243,6 @@ class MultiBypassVpnService : VpnService() {
 
                 try {
                     ByeDpiProxy.setDnsRedirectPort(0)
-                    ByeDpiProxy.setBlockQuic(false)
                 } catch (_: Exception) {}
 
                 val repository = SettingsRepository.getInstance(applicationContext)
@@ -275,7 +273,6 @@ class MultiBypassVpnService : VpnService() {
                     ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
                     delay(250)
                     try {
-                        ByeDpiProxy.setBlockQuic(false)
                         ByeDpiProxy.setDnsRedirectPort(0)
                     } catch (_: Exception) {}
                     ServiceWatchdog.triggerCheck(500)

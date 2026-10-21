@@ -43,7 +43,6 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
-    val blockQuic by repository.blockQuic.collectAsState()
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
 
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
@@ -124,41 +123,6 @@ fun SettingsScreen(
                     Switch(
                         checked = bootAutoStart,
                         onCheckedChange = { repository.setBootAutoStart(it) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Network Protocols (QUIC / HTTP/3)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            "Блокировка QUIC (HTTP/3)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            "Принудительный перевод трафика на протокол TCP для стабильной работы SmartDNS (Gemini, ChatGPT) и обхода замедлений YouTube",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Switch(
-                        checked = blockQuic,
-                        onCheckedChange = { repository.setBlockQuic(it) }
                     )
                 }
             }

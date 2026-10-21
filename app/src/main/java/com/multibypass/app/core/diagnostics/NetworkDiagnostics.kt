@@ -297,13 +297,12 @@ object NetworkDiagnostics {
         )
 
         // 9. QUIC Protocol Check
-        val quicBlocked = repository.blockQuic.value
         steps.add(
             DiagnosticStepResult(
                 title = "Протокол QUIC (HTTP/3)",
-                description = if (quicBlocked) "Блокируется (форсирование TCP)" else "Разрешен (прозрачный режим OpenWrt)",
+                description = "Прозрачный режим (OpenWrt)",
                 status = DiagnosticStatus.SUCCESS,
-                detail = if (quicBlocked) "UDP 443 блокируется принудительно" else "UDP 443 передается прозрачно, без задержек превью YouTube"
+                detail = "UDP 443 передается прозрачно без дропов и зависаний интерфейса"
             )
         )
 
