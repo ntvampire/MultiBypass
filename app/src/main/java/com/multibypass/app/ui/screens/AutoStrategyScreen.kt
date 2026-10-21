@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.byedpi.ByeDpiController
+import com.multibypass.app.core.byedpi.PresetStrategies
 import com.multibypass.app.core.byedpi.StrategyTester
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
@@ -35,14 +36,16 @@ fun AutoStrategyScreen(
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
 
-    val tester = remember { StrategyTester(context.applicationContext) }
+    val tester = remember { StrategyTester.getInstance(context) }
     val isTesting by tester.isTesting.collectAsState()
     val testResults by tester.testResults.collectAsState()
+    val lastTimestamp by repository.lastStrategyTimestamp.collectAsState()
 
-    DisposableEffect(Unit) {
-        onDispose {
-            tester.stopTest()
-        }
+    val formattedDate = remember(lastTimestamp) {
+        if (lastTimestamp > 0) {
+            val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(lastTimestamp))
+        } else ""
     }
 
     Scaffold(
@@ -99,7 +102,7 @@ fun AutoStrategyScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        com.multibypass.app.core.byedpi.PresetStrategies.defaultTestTargets.forEach { target ->
+                        PresetStrategies.defaultTestTargets.forEach { target ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = DarkSurfaceVariant
@@ -119,7 +122,13 @@ fun AutoStrategyScreen(
 
                     if (isTesting) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "⏳ Идет подбор в фоне. Экран можно заблокировать — тест не прервется.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AccentOrange
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         OutlinedButton(
                             onClick = { tester.stopTest() },
                             modifier = Modifier.fillMaxWidth(),
@@ -144,99 +153,147 @@ fun AutoStrategyScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Результаты (${testResults.size}):",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Результаты (${testResults.size}):",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (formattedDate.isNotEmpty() && !isTesting) {
+                    Text(
+                        text = "Проверено: $formattedDate",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(testResults) { res ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            if (testResults.isEmpty() && !isTesting) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Тестирование еще не проводилось",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Нажмите «Запустить автоподбор», чтобы протестировать пресеты для вашего провайдера.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(testResults) { res ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = DarkSurface)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = res.strategy,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                if (res.isWorking) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "${res.latencyMs} мс (${res.successfulSitesCount}/${res.testedSitesCount})",
-                                            color = GreenPrimary,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    if (res.workingServices.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            res.workingServices.forEach { sName ->
-                                                val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = GreenPrimary.copy(alpha = 0.15f)
-                                                ) {
-                                                    Text(
-                                                        text = "$sName$sLat",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = GreenPrimary,
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                                    )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = res.strategy,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    if (res.isWorking) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "${res.latencyMs} мс (${res.successfulSitesCount}/${res.testedSitesCount})",
+                                                color = GreenPrimary,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (res.workingServices.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                res.workingServices.forEach { sName ->
+                                                    val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = GreenPrimary.copy(alpha = 0.15f)
+                                                    ) {
+                                                        Text(
+                                                            text = "$sName$sLat",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = GreenPrimary,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                } else {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Не работает ни один сервис", color = RedDanger, style = MaterialTheme.typography.bodySmall)
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Не работает ни один сервис", color = RedDanger, style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
-                            }
 
-                            if (res.isWorking) {
-                                val isCurrent = antiDpiConfig.strategy == res.strategy
-                                if (isCurrent) {
-                                    Text("Активна", color = GreenPrimary, fontWeight = FontWeight.Bold)
-                                } else {
-                                    FilledTonalButton(
-                                        onClick = {
-                                            repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = res.strategy))
-                                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
-                                                coroutineScope.launch {
-                                                    ByeDpiController.start(strategy = res.strategy)
+                                if (res.isWorking) {
+                                    val isCurrent = antiDpiConfig.strategy == res.strategy
+                                    if (isCurrent) {
+                                        Text("Активна", color = GreenPrimary, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = res.strategy))
+                                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                                    coroutineScope.launch {
+                                                        ByeDpiController.start(strategy = res.strategy)
+                                                    }
                                                 }
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Применить")
+                                            },
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("Применить")
+                                        }
                                     }
                                 }
                             }

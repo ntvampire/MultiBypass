@@ -12,18 +12,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.byedpi.PresetStrategies
+import com.multibypass.app.core.byedpi.StrategyTester
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.AntiDpiGroupConfig
+import com.multibypass.app.data.model.StrategyTestResult
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.theme.AccentOrange
 import com.multibypass.app.ui.theme.DarkBackground
 import com.multibypass.app.ui.theme.DarkSurface
+import com.multibypass.app.ui.theme.GreenPrimary
+import com.multibypass.app.ui.theme.RedDanger
 import com.multibypass.app.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
@@ -37,6 +43,17 @@ fun AntiDpiGroupScreen(
     val scope = rememberCoroutineScope()
     val repository = remember { SettingsRepository.getInstance(context) }
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
+    val lastResults by repository.lastStrategyResults.collectAsState()
+    val lastTimestamp by repository.lastStrategyTimestamp.collectAsState()
+    val strategyTester = remember { StrategyTester.getInstance(context) }
+    val isTesting by strategyTester.isTesting.collectAsState()
+
+    val formattedDate = remember(lastTimestamp) {
+        if (lastTimestamp > 0) {
+            val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(lastTimestamp))
+        } else ""
+    }
 
     BackHandler(onBack = onNavigateBack)
 
@@ -115,6 +132,192 @@ fun AntiDpiGroupScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
+                }
+            }
+
+            if (isTesting) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = AccentOrange,
+                                    strokeWidth = 2.5.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Идет автоподбор в фоне...",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            TextButton(onClick = onNavigateToAutoStrategy) {
+                                Text("Открыть", color = AccentOrange, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Процесс продолжается даже при выключенном экране. Вы можете продолжить пользоваться телефоном.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            } else if (lastResults.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                val best = lastResults.filter { it.isWorking }.minWithOrNull(
+                    compareByDescending<StrategyTestResult> { it.successfulSitesCount }.thenBy { it.latencyMs }
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Результаты автоподбора",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (formattedDate.isNotEmpty()) {
+                                    Text(
+                                        text = "Проверено: $formattedDate",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+                            TextButton(onClick = onNavigateToAutoStrategy) {
+                                Text("Все пресеты (${lastResults.size})", color = AccentOrange)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (best != null) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = DarkBackground,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Лучший пресет: ${best.latencyMs} мс",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GreenPrimary
+                                        )
+                                        Text(
+                                            text = "${best.successfulSitesCount}/${best.testedSitesCount} сервисов",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = GreenPrimary
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = best.strategy,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+
+                                    if (best.workingServices.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            best.workingServices.forEach { sName ->
+                                                val sLat = best.serviceLatencies[sName]?.let { " ${it}мс" } ?: ""
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = GreenPrimary.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "$sName$sLat",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = GreenPrimary,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            val isCurrentStrategy = antiDpiConfig.strategy == best.strategy
+
+                            Button(
+                                onClick = {
+                                    repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = best.strategy))
+                                    if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                        scope.launch {
+                                            ByeDpiController.start(strategy = best.strategy)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isCurrentStrategy) DarkBackground else GreenPrimary
+                                ),
+                                enabled = !isCurrentStrategy
+                            ) {
+                                Icon(
+                                    if (isCurrentStrategy) Icons.Default.Check else Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (isCurrentStrategy) TextSecondary else Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isCurrentStrategy) "Активна лучшая стратегия" else "Применить лучшую стратегию",
+                                    color = if (isCurrentStrategy) TextSecondary else Color.White
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Ни одна стратегия не показала доступность при последней проверке.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = RedDanger
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onNavigateToAutoStrategy,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Повторить проверку")
+                            }
+                        }
+                    }
                 }
             }
 

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.DnsGroupConfig
+import com.multibypass.app.data.model.StrategyTestResult
 import com.multibypass.app.data.model.TelegramProxyConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,8 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
         private const val CURRENT_DOMAINS_VERSION = 7
+        private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
+        private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null
@@ -58,6 +61,12 @@ class SettingsRepository(private val context: Context) {
 
     private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
+
+    private val _lastStrategyResults = MutableStateFlow(loadLastStrategyResults())
+    val lastStrategyResults: StateFlow<List<StrategyTestResult>> = _lastStrategyResults.asStateFlow()
+
+    private val _lastStrategyTimestamp = MutableStateFlow(prefs.getLong(KEY_LAST_STRATEGY_TIMESTAMP, 0L))
+    val lastStrategyTimestamp: StateFlow<Long> = _lastStrategyTimestamp.asStateFlow()
 
     init {
         // Enforce watchdog always enabled
@@ -146,6 +155,26 @@ class SettingsRepository(private val context: Context) {
     fun setWatchdogEnabled(enabled: Boolean) {
         _watchdogEnabled.value = true
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
+    }
+
+    fun saveStrategyTestResults(results: List<StrategyTestResult>) {
+        val now = System.currentTimeMillis()
+        _lastStrategyResults.value = results
+        _lastStrategyTimestamp.value = now
+        prefs.edit()
+            .putString(KEY_LAST_STRATEGY_RESULTS, gson.toJson(results))
+            .putLong(KEY_LAST_STRATEGY_TIMESTAMP, now)
+            .apply()
+    }
+
+    private fun loadLastStrategyResults(): List<StrategyTestResult> {
+        val json = prefs.getString(KEY_LAST_STRATEGY_RESULTS, null) ?: return emptyList()
+        return try {
+            val type = object : com.google.gson.reflect.TypeToken<List<StrategyTestResult>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     private fun loadRoutedApps(): List<String> {

@@ -1,7 +1,15 @@
 package com.multibypass.app.core.byedpi
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.PowerManager
 import android.util.Log
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.multibypass.app.MultiBypassApplication
+import com.multibypass.app.R
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.StrategyTestResult
@@ -64,19 +72,32 @@ data class TestTarget(
     val url: String
 )
 
-class StrategyTester(private val context: Context) {
+class StrategyTester private constructor(private val context: Context) {
     companion object {
         private const val TAG = "StrategyTester"
         private const val TEST_PORT = 1080
+        private const val NOTIF_ID_TESTING = 3001
+
+        @Volatile
+        private var INSTANCE: StrategyTester? = null
+
+        fun getInstance(context: Context): StrategyTester {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: StrategyTester(context.applicationContext).also { INSTANCE = it }
+            }
+        }
     }
+
+    private val repository = SettingsRepository.getInstance(context)
 
     private val _isTesting = MutableStateFlow(false)
     val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
 
-    private val _testResults = MutableStateFlow<List<StrategyTestResult>>(emptyList())
+    private val _testResults = MutableStateFlow<List<StrategyTestResult>>(repository.lastStrategyResults.value)
     val testResults: StateFlow<List<StrategyTestResult>> = _testResults.asStateFlow()
 
     private var testJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val httpClient by lazy {
         OkHttpClient.Builder()
@@ -99,7 +120,29 @@ class StrategyTester(private val context: Context) {
             ServiceWatchdog.setTesting(true)
             _testResults.value = emptyList()
 
-            val repository = SettingsRepository.getInstance(context)
+            // Acquire WakeLock to keep CPU running when screen turns off
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MultiBypass:StrategyBenchmarkWakeLock")
+            wakeLock?.acquire(15 * 60 * 1000L)
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            val hasNotifPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+            fun updateProgressNotification(current: Int, total: Int, bestLatency: Long?) {
+                if (!hasNotifPermission) return
+                val title = "Автоподбор стратегий TCP ($current/$total)"
+                val text = if (bestLatency != null) "Лучшая: $bestLatency мс" else "Идет тестирование стратегий..."
+                val notif = NotificationCompat.Builder(context, MultiBypassApplication.UPDATE_NOTIFICATION_CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_stat_vpn)
+                    .setContentTitle(title)
+                    .setContentText(text)
+                    .setProgress(total, current, false)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setOngoing(true)
+                    .build()
+                notificationManager.notify(NOTIF_ID_TESTING, notif)
+            }
+
             val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
             val originalStrategy = repository.antiDpiConfig.value.strategy
             ByeDpiController.ensureHostsFile(context)
@@ -110,20 +153,27 @@ class StrategyTester(private val context: Context) {
                 val strategies = PresetStrategies.loadStrategies(context)
                 val results = mutableListOf<StrategyTestResult>()
 
-                for (strategy in strategies) {
+                for ((index, strategy) in strategies.withIndex()) {
                     if (!isActive) break
+
+                    updateProgressNotification(index + 1, strategies.size, bestResult?.latencyMs)
 
                     val result = testSingleStrategy(strategy, targets)
                     results.add(result)
-                    _testResults.value = results.sortedWith(
+                    val sorted = results.sortedWith(
                         compareByDescending<StrategyTestResult> { it.isWorking }
                             .thenByDescending { it.successfulSitesCount }
                             .thenBy { it.latencyMs }
                     )
+                    _testResults.value = sorted
 
                     if (result.isWorking && (bestResult == null || result.latencyMs < bestResult.latencyMs)) {
                         bestResult = result
                     }
+                }
+
+                if (_testResults.value.isNotEmpty()) {
+                    repository.saveStrategyTestResults(_testResults.value)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Testing error: ${e.message}", e)
@@ -140,6 +190,14 @@ class StrategyTester(private val context: Context) {
                     ByeDpiController.stop()
                 }
 
+                if (wakeLock?.isHeld == true) {
+                    try {
+                        wakeLock?.release()
+                    } catch (_: Exception) {}
+                }
+                wakeLock = null
+
+                notificationManager.cancel(NOTIF_ID_TESTING)
                 ServiceWatchdog.setTesting(false)
                 _isTesting.value = false
                 onComplete(bestResult)
@@ -150,8 +208,10 @@ class StrategyTester(private val context: Context) {
     fun stopTest() {
         testJob?.cancel()
         testJob = null
+        if (_testResults.value.isNotEmpty()) {
+            repository.saveStrategyTestResults(_testResults.value)
+        }
         val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
-        val repository = SettingsRepository.getInstance(context)
         val originalStrategy = repository.antiDpiConfig.value.strategy
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -164,6 +224,17 @@ class StrategyTester(private val context: Context) {
             } else {
                 ByeDpiController.stop()
             }
+
+            if (wakeLock?.isHeld == true) {
+                try {
+                    wakeLock?.release()
+                } catch (_: Exception) {}
+            }
+            wakeLock = null
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.cancel(NOTIF_ID_TESTING)
+
             ServiceWatchdog.setTesting(false)
             _isTesting.value = false
         }
