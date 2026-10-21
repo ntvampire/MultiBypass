@@ -53,8 +53,21 @@ object PresetStrategies {
     )
 
     fun loadStrategies(context: Context): List<String> {
+        val downloadedFile = java.io.File(context.filesDir, "strategies.txt")
+        if (downloadedFile.exists() && downloadedFile.length() > 0) {
+            try {
+                val list = downloadedFile.bufferedReader().useLines { lines ->
+                    lines.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.toList()
+                }
+                if (list.isNotEmpty()) return list
+            } catch (e: Exception) {
+                Log.w("PresetStrategies", "Failed to load downloaded strategies.txt: ${e.message}")
+            }
+        }
+
         return try {
-            context.assets.open("proxytest_strategies.list").bufferedReader().useLines { lines ->
+            val assetName = if (context.assets.list("")?.contains("strategies.txt") == true) "strategies.txt" else "proxytest_strategies.list"
+            context.assets.open(assetName).bufferedReader().useLines { lines ->
                 lines.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.toList()
             }.ifEmpty { defaultList }
         } catch (e: Exception) {

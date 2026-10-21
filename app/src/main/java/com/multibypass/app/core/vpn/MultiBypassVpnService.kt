@@ -22,7 +22,7 @@ import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
-import io.github.romanvht.byedpi.core.TProxyService
+import hev.htproxy.TProxyService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -198,7 +198,10 @@ class MultiBypassVpnService : VpnService() {
                     writeText(tunConfig)
                 }
 
-                TProxyService.TProxyStartService(configFile.absolutePath, fd.fd)
+                val started = TProxyService.TProxyStartService(configFile.absolutePath, fd.fd)
+                if (!started) {
+                    Log.w(TAG, "hev-socks5-tunnel start returned false, tunnel may already be active")
+                }
 
                 // 5. Register dynamic underlying network tracking (Wi-Fi <-> LTE seamless migration)
                 registerNetworkTracking()

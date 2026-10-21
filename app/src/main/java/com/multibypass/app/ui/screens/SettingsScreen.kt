@@ -288,7 +288,7 @@ fun SettingsScreen(
                                     val result = com.multibypass.app.core.lists.ListUpdateManager.forceUpdateAll(context)
                                     isUpdatingLists = false
                                     listsUpdateStatusMessage = if (result.success) {
-                                        "Обновлено: DNS (${result.dnsCount}), Anti-DPI (${result.antiDpiCount}), Серверы (${result.dnsProvidersCount})"
+                                        "Обновлено: DNS (${result.dnsCount}), Anti-DPI (${result.antiDpiCount}), Стратегии (${result.strategiesCount}), Серверы (${result.dnsProvidersCount})"
                                     } else {
                                         result.errorMessage ?: "Ошибка загрузки списков"
                                     }

@@ -17,6 +17,7 @@ data class ListUpdateResult(
     val success: Boolean,
     val dnsCount: Int = 0,
     val antiDpiCount: Int = 0,
+    val strategiesCount: Int = 0,
     val dnsProvidersCount: Int = 0,
     val errorMessage: String? = null
 )
@@ -32,10 +33,12 @@ object ListUpdateManager {
         try {
             val dnsContent = fetchWithFallback("domains_dns.txt")
             val antiDpiContent = fetchWithFallback("domains_antidpi.txt")
+            val strategiesContent = fetchWithFallback("strategies.txt")
             val providersContent = fetchWithFallback("dns_providers.json")
 
             var dnsCount = 0
             var antiDpiCount = 0
+            var strategiesCount = 0
             var providersCount = 0
 
             val repo = SettingsRepository.getInstance(context)
@@ -59,6 +62,19 @@ object ListUpdateManager {
                 }
             }
 
+            if (strategiesContent.isNotBlank()) {
+                val strategies = strategiesContent.lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && !it.startsWith("#") }
+                    .distinct()
+                    .toList()
+                if (strategies.isNotEmpty()) {
+                    strategiesCount = strategies.size
+                    File(context.filesDir, "strategies.txt").writeText(strategiesContent)
+                    File(context.filesDir, "proxytest_strategies.list").writeText(strategiesContent)
+                }
+            }
+
             if (providersContent.isNotBlank()) {
                 try {
                     val type = object : TypeToken<List<DnsPreset>>() {}.type
@@ -73,11 +89,12 @@ object ListUpdateManager {
                 }
             }
 
-            val hasAnySuccess = dnsCount > 0 || antiDpiCount > 0 || providersCount > 0
+            val hasAnySuccess = dnsCount > 0 || antiDpiCount > 0 || strategiesCount > 0 || providersCount > 0
             ListUpdateResult(
                 success = hasAnySuccess,
                 dnsCount = dnsCount,
                 antiDpiCount = antiDpiCount,
+                strategiesCount = strategiesCount,
                 dnsProvidersCount = providersCount,
                 errorMessage = if (!hasAnySuccess) "Не удалось получить списки из сети" else null
             )

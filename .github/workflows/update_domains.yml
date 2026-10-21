@@ -1,9 +1,9 @@
-name: Update Mobile Domain Lists & Providers
+name: Update Mobile Lists, Strategies & Providers
 
 on:
   schedule:
-    # Run daily at 03:00 UTC
-    - cron: '0 3 * * *'
+    # Run weekly on Wednesdays at 04:37 UTC (offset non-standard minute to avoid GitHub Actions peak traffic)
+    - cron: '37 4 * * 3'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run Domain Lists Pipeline
+      - name: Run Lists & Strategies Pipeline
         run: python scripts/update_domains.py
 
       - name: Commit and Push Changes
@@ -30,8 +30,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/ app/src/main/assets/
           if git diff --staged --quiet; then
-            echo "No changes in domain lists or providers."
+            echo "No changes in domain lists, strategies or providers."
           else
-            git commit -m "chore(lists): automatic daily update of domain lists and providers"
+            git commit -m "chore(lists): automatic weekly update of domain lists, strategies and providers"
             git push
           fi

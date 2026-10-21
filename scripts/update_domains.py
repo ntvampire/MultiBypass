@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-MultiBypass Domain Lists & DNS Providers Pipeline.
+MultiBypass Domain Lists, Strategies & DNS Providers Pipeline.
 Fetches, cleans, deduplicates mobile-first domain lists for SmartDNS and Anti-DPI,
-and mirrors DNS provider configurations for GitHub Pages distribution.
+orders TCP desynchronization strategies from simple to complex with default #1,
+and mirrors configurations for GitHub Pages distribution.
 
-Runs via GitHub Actions on schedule and publishes to GitHub Pages (docs/).
+Runs via GitHub Actions on weekly schedule and publishes to GitHub Pages (docs/).
 """
 
 import hashlib
@@ -25,15 +26,21 @@ ASSETS_DIR = REPO_ROOT / "app" / "src" / "main" / "assets"
 
 SEEDS_DNS_FILE = SEEDS_DIR / "seeds_dns.txt"
 SEEDS_ANTIDPI_FILE = SEEDS_DIR / "seeds_antidpi.txt"
+SEEDS_STRATEGIES_FILE = SEEDS_DIR / "seeds_strategies.txt"
 
 OUT_DNS_DOCS = DOCS_DIR / "domains_dns.txt"
 OUT_ANTIDPI_DOCS = DOCS_DIR / "domains_antidpi.txt"
+OUT_STRATEGIES_DOCS = DOCS_DIR / "strategies.txt"
 OUT_VERSION_DOCS = DOCS_DIR / "domains_version.json"
 OUT_PROVIDERS_DOCS = DOCS_DIR / "dns_providers.json"
 
 OUT_DNS_ASSETS = ASSETS_DIR / "domains_dns.txt"
 OUT_ANTIDPI_ASSETS = ASSETS_DIR / "domains_antidpi.txt"
+OUT_STRATEGIES_ASSETS = ASSETS_DIR / "strategies.txt"
+OUT_STRATEGIES_LIST_ASSETS = ASSETS_DIR / "proxytest_strategies.list"
 OUT_PROVIDERS_ASSETS = ASSETS_DIR / "dns_providers.json"
+
+DEFAULT_STRATEGY = "-o1 -r-5+se -a1"
 
 # External upstream sources
 UPSTREAM_ANTIDPI_URLS = [
@@ -163,18 +170,45 @@ def process_dns_domains() -> list[str]:
     return result[:200]
 
 
+def process_strategies() -> list[str]:
+    """Process, validate, deduplicate and sort TCP desync strategies."""
+    if not SEEDS_STRATEGIES_FILE.exists():
+        print(f"[WARN] Strategies seed file {SEEDS_STRATEGIES_FILE} not found!", file=sys.stderr)
+        return [DEFAULT_STRATEGY]
+
+    strategies = []
+    seen = set()
+
+    with open(SEEDS_STRATEGIES_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            if s not in seen:
+                seen.add(s)
+                strategies.append(s)
+
+    # Ensure DEFAULT_STRATEGY is always at position 0
+    if DEFAULT_STRATEGY in strategies:
+        strategies.remove(DEFAULT_STRATEGY)
+    strategies.insert(0, DEFAULT_STRATEGY)
+
+    return strategies
+
+
 def main():
-    print("=== MultiBypass Lists & Providers Pipeline ===")
+    print("=== MultiBypass Lists, Strategies & Providers Pipeline ===")
 
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Process domain lists
+    # 1. Process domain lists and strategies
     antidpi_list = process_antidpi_domains()
     dns_list = process_dns_domains()
+    strategies_list = process_strategies()
 
-    if not antidpi_list or not dns_list:
-        print("[ERROR] One of the domain lists is empty! Aborting update to protect database.", file=sys.stderr)
+    if not antidpi_list or not dns_list or not strategies_list:
+        print("[ERROR] One of the lists is empty! Aborting update to protect database.", file=sys.stderr)
         sys.exit(1)
 
     # 2. Format outputs with header comments
@@ -190,8 +224,15 @@ def main():
         + "\n".join(antidpi_list) + "\n"
     )
 
+    strategies_text = (
+        "# MultiBypass - Пресеты десинхронизации TCP (ByeByeDPI)\n"
+        "# Отсортированы от простых к сложным. Стратегия по умолчанию (#1) зафиксирована на позиции 1.\n"
+        + "\n".join(strategies_list) + "\n"
+    )
+
     dns_hash = compute_sha256(dns_text)
     antidpi_hash = compute_sha256(antidpi_text)
+    strategies_hash = compute_sha256(strategies_text)
 
     # 3. Read previous version metadata
     prev_version = 0
@@ -219,17 +260,25 @@ def main():
             "sha256": antidpi_hash,
             "filename": "domains_antidpi.txt"
         },
+        "strategies": {
+            "count": len(strategies_list),
+            "sha256": strategies_hash,
+            "filename": "strategies.txt"
+        },
         "providers": {
             "filename": "dns_providers.json"
         }
     }
 
-    # 4. Write domain lists to docs/
+    # 4. Write files to docs/ (GitHub Pages distribution)
     with open(OUT_DNS_DOCS, "w", encoding="utf-8", newline="\n") as f:
         f.write(dns_text)
 
     with open(OUT_ANTIDPI_DOCS, "w", encoding="utf-8", newline="\n") as f:
         f.write(antidpi_text)
+
+    with open(OUT_STRATEGIES_DOCS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(strategies_text)
 
     with open(OUT_VERSION_DOCS, "w", encoding="utf-8", newline="\n") as f:
         json.dump(version_metadata, f, indent=2, ensure_ascii=False)
@@ -242,6 +291,12 @@ def main():
     with open(OUT_ANTIDPI_ASSETS, "w", encoding="utf-8", newline="\n") as f:
         f.write(antidpi_text)
 
+    with open(OUT_STRATEGIES_ASSETS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(strategies_text)
+
+    with open(OUT_STRATEGIES_LIST_ASSETS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(strategies_text)
+
     # 6. Mirror dns_providers.json to assets if in docs
     if OUT_PROVIDERS_DOCS.exists():
         with open(OUT_PROVIDERS_DOCS, "r", encoding="utf-8") as f:
@@ -252,6 +307,7 @@ def main():
     print(f"[SUCCESS] Updated:")
     print(f"  - DNS: {len(dns_list)} domains (SHA256: {dns_hash[:10]}...)")
     print(f"  - AntiDPI: {len(antidpi_list)} domains (SHA256: {antidpi_hash[:10]}...)")
+    print(f"  - Strategies: {len(strategies_list)} presets (Default #1: {DEFAULT_STRATEGY})")
     print(f"  - Version: {new_version} ({now_iso})")
 
 
