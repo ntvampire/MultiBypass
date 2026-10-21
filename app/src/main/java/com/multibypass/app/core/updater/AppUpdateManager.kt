@@ -4,8 +4,10 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
@@ -237,24 +239,13 @@ object AppUpdateManager {
     fun checkAndInstallPendingApk(context: Context): Boolean {
         val file = pendingInstallApk ?: File(context.cacheDir, "update.apk").takeIf { it.exists() && _downloadProgress.value == 100 }
         if (file != null && file.exists()) {
-            try {
-                val contentUri: Uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.provider",
-                    file
-                )
-
-                val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(contentUri, "application/vnd.android.package-archive")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-
-                context.startActivity(installIntent)
+            if (installViaPackageInstaller(context, file)) {
                 pendingInstallApk = null
                 return true
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch package installer from foreground", e)
             }
+            fallbackInstall(context, file)
+            pendingInstallApk = null
+            return true
         }
         return false
     }
@@ -265,11 +256,82 @@ object AppUpdateManager {
         notificationManager: NotificationManagerCompat,
         notifId: Int
     ) {
+        if (!file.exists()) return
+
+        // 1. Try modern PackageInstaller session (avoids Play Protect unverified warning & biometric gate)
+        if (installViaPackageInstaller(context, file)) {
+            Log.i(TAG, "Install session committed via PackageInstaller")
+            pendingInstallApk = null
+            notificationManager.cancel(notifId)
+            return
+        }
+
+        // 2. Fallback to ACTION_VIEW if PackageInstaller fails
+        fallbackInstall(context, file, notificationManager, notifId)
+    }
+
+    fun installViaPackageInstaller(context: Context, file: File): Boolean {
+        var sessionId = -1
+        val packageInstaller = context.packageManager.packageInstaller
+        try {
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+                setAppPackageName(context.packageName)
+                setSize(file.length())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                }
+            }
+
+            sessionId = packageInstaller.createSession(params)
+            val session = packageInstaller.openSession(sessionId)
+
+            session.openWrite("base.apk", 0, file.length()).use { outStream ->
+                file.inputStream().use { inStream ->
+                    inStream.copyTo(outStream)
+                }
+                session.fsync(outStream)
+            }
+
+            val callbackIntent = Intent(context, InstallReceiver::class.java).apply {
+                action = InstallReceiver.ACTION_INSTALL_STATUS
+                setPackage(context.packageName)
+            }
+
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                sessionId,
+                callbackIntent,
+                flags
+            )
+
+            session.commit(pendingIntent.intentSender)
+            session.close()
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install via PackageInstaller, falling back", e)
+            if (sessionId != -1) {
+                try {
+                    packageInstaller.abandonSession(sessionId)
+                } catch (_: Exception) {}
+            }
+            return false
+        }
+    }
+
+    fun fallbackInstall(
+        context: Context,
+        file: File? = null,
+        notificationManager: NotificationManagerCompat? = null,
+        notifId: Int = 1002
+    ) {
+        val targetFile = file ?: pendingInstallApk ?: File(context.cacheDir, "update.apk").takeIf { it.exists() } ?: return
         try {
             val contentUri: Uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.provider",
-                file
+                targetFile
             )
 
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -294,14 +356,15 @@ object AppUpdateManager {
                 .setContentIntent(pendingIntent)
                 .build()
 
+            val nm = notificationManager ?: NotificationManagerCompat.from(context)
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(notifId, completeNotif)
+                nm.notify(notifId, completeNotif)
             }
 
             context.startActivity(installIntent)
             pendingInstallApk = null
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch package installer (background start might be blocked)", e)
+            Log.e(TAG, "Failed fallback install", e)
         }
     }
 
