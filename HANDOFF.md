@@ -66,3 +66,11 @@
      powershell -ExecutionPolicy Bypass -File "C:\Users\Mike\.gemini\antigravity\brain\7cd7688e-1822-4c0a-b0e5-7db5cf4ac4cc\scratch\push.ps1"
      ```
    - Запросы к GitHub API выполняются через IP `140.82.121.6` с заголовком `Host: api.github.com`.
+
+4. **Регламент публикации релизов (без дубликатов файлов)**:
+   - Поднимаем `versionCode` и `versionName` в `app/build.gradle.kts`.
+   - Добавляем описание в `RELEASE_NOTES.md`.
+   - Коммитим и ставим тег `vX.X.X`.
+   - Пушим коммит и тег через `push.ps1`.
+   - GitHub Actions (`release.yml`) автоматически собирает релиз, присваивает файлам красивое имя `MultiBypass-vX.X.X-*.apk` и публикует их.
+   - Локальная загрузка сырых файлов `app-*-release.apk` через CLI запрещена, чтобы исключить дублирование.
