@@ -19,11 +19,11 @@ object DnsPresets {
             description = "SmartDNS: Gemini, ChatGPT, Claude, Spotify, Canva, Notion, Xbox"
         ),
         DnsPreset(
-            id = "dns_ai",
-            name = "DNS-AI",
-            standardIp = "45.151.102.219",
-            dohUrl = "https://dns.dns-ai.ru/dns-query",
-            description = "Скоростной DoH/DoT для ИИ-сервисов (Gemini, ChatGPT, Claude)"
+            id = "wlrus",
+            name = "Wlrus DNS",
+            standardIp = "138.124.254.134",
+            dohUrl = "https://dns.wlrus.cfd/dns-query",
+            description = "SmartDNS (16.5 мс Anycast): Gemini, ChatGPT, Claude, зарубежные сервисы"
         ),
         DnsPreset(
             id = "webshift",
@@ -31,6 +31,13 @@ object DnsPresets {
             standardIp = "31.31.207.68",
             dohUrl = "https://dns.comss.one/dns-query",
             description = "Быстрый SmartDNS (UDP 53) для Gemini и 400+ зарубежных сервисов"
+        ),
+        DnsPreset(
+            id = "dns_ai",
+            name = "DNS-AI",
+            standardIp = "45.151.102.219",
+            dohUrl = "https://dns.dns-ai.ru/dns-query",
+            description = "Скоростной DoH/DoT для ИИ-сервисов (Gemini, ChatGPT, Claude)"
         ),
         DnsPreset(
             id = "nextdns",

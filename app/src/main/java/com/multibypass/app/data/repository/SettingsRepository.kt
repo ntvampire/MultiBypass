@@ -69,7 +69,7 @@ class SettingsRepository(private val context: Context) {
             val defaultDns = DnsGroupConfig()
             val currentDns = _dnsConfig.value
             val mergedDnsDomains = (defaultDns.domains + currentDns.domains).distinct()
-            val validPresetIds = setOf("comss", "dns_ai", "webshift", "nextdns", "custom")
+            val validPresetIds = setOf("comss", "wlrus", "webshift", "dns_ai", "nextdns", "custom")
             val newPresetId = if (currentDns.presetId in validPresetIds) currentDns.presetId else "comss"
             val newStandardIp = if (currentDns.customStandardIp == "92.223.109.31" || currentDns.customStandardIp.isBlank()) {
                 "195.133.25.16"
