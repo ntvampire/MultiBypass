@@ -127,7 +127,7 @@ class MultiBypassVpnService : VpnService() {
                 } catch (_: Exception) {}
 
                 // 2. Start Telegram WS Proxy if enabled
-                if (tgConfig.enabled && tgConfig.autoStartWithVpn) {
+                if (tgConfig.enabled && (tgConfig.autoStartWithVpn || tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT)) {
                     TelegramProxyService.start(applicationContext)
                 }
 
@@ -182,7 +182,14 @@ class MultiBypassVpnService : VpnService() {
                 val fd = builder.establish() ?: throw IllegalStateException("VPN establish() failed")
                 tunFd = fd
 
-                // 4. Create hev-socks5-tunnel config and start tunnel
+                // 4. Start Socks5Dispatcher to route Telegram DC traffic to sTGWS and everything else to ByeByeDPI
+                Socks5Dispatcher.start(
+                    context = applicationContext,
+                    listenPort = Socks5Dispatcher.DEFAULT_PORT,
+                    downstreamPort = ByeDpiController.DEFAULT_PORT
+                )
+
+                // 5. Create hev-socks5-tunnel config pointing to Socks5Dispatcher
                 val tunConfig = buildString {
                     appendLine("tunnel:")
                     appendLine("  mtu: 1500")
@@ -190,7 +197,7 @@ class MultiBypassVpnService : VpnService() {
                     appendLine("  task-stack-size: 81920")
                     appendLine("socks5:")
                     appendLine("  address: 127.0.0.1")
-                    appendLine("  port: ${ByeDpiController.DEFAULT_PORT}")
+                    appendLine("  port: ${Socks5Dispatcher.DEFAULT_PORT}")
                     appendLine("  udp: udp")
                 }
 
@@ -234,6 +241,12 @@ class MultiBypassVpnService : VpnService() {
                 delay(100)
 
                 try {
+                    Socks5Dispatcher.stop()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping Socks5Dispatcher", e)
+                }
+
+                try {
                     tunFd?.close()
                 } catch (_: Exception) {}
                 tunFd = null
@@ -249,7 +262,7 @@ class MultiBypassVpnService : VpnService() {
                 } catch (_: Exception) {}
 
                 val repository = SettingsRepository.getInstance(applicationContext)
-                if (repository.tgConfig.value.autoStartWithVpn) {
+                if (repository.tgConfig.value.autoStartWithVpn || repository.tgConfig.value.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
                     TelegramProxyService.stop(applicationContext)
                 }
 

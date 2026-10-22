@@ -149,9 +149,14 @@ class TelegramProxyService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        val repository = SettingsRepository.getInstance(applicationContext)
+        val isTransparent = repository.tgConfig.value.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT
+        val title = if (isTransparent) "Telegram (sTGWS)" else "Telegram WS Proxy"
+        val text = if (isTransparent) "Прозрачный режим активен (настройка не требуется)" else "Локальный MTProto прокси активен (порт 1443)"
+
         return NotificationCompat.Builder(this, MultiBypassApplication.TG_NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Telegram WS Proxy")
-            .setContentText("Локальный MTProto прокси активен (порт 1443)")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

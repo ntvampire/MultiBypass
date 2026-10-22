@@ -14,8 +14,8 @@ android {
         applicationId = "com.multibypass.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 26
-        versionName = "1.2.12"
+        versionCode = 27
+        versionName = "1.2.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -123,4 +123,7 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Unit Testing
+    testImplementation("junit:junit:4.13.2")
 }

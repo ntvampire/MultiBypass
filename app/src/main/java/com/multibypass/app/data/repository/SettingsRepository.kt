@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.multibypass.app.data.model.AntiDpiGroupConfig
 import com.multibypass.app.data.model.DnsGroupConfig
 import com.multibypass.app.data.model.StrategyTestResult
+import com.multibypass.app.data.model.TelegramMode
 import com.multibypass.app.data.model.TelegramProxyConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -145,6 +146,11 @@ class SettingsRepository(private val context: Context) {
             .putString(KEY_TG_CONFIG, gson.toJson(config))
             .putString(KEY_TG_SECRET, config.secret)
             .apply()
+    }
+
+    fun isTelegramTransparentActive(): Boolean {
+        val cfg = _tgConfig.value
+        return cfg.enabled && cfg.mode == TelegramMode.TRANSPARENT
     }
 
     fun setBootAutoStart(enabled: Boolean) {

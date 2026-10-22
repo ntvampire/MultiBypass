@@ -160,8 +160,14 @@ data class AntiDpiGroupConfig(
     val appPackages: List<String> = emptyList()
 )
 
+enum class TelegramMode {
+    TRANSPARENT,
+    MTPROTO_PROXY
+}
+
 data class TelegramProxyConfig(
     val enabled: Boolean = true,
+    val mode: TelegramMode = TelegramMode.TRANSPARENT,
     val port: Int = 1443,
     val secret: String = "112233445566778899aabbccddeeff00",
     val autoStartWithVpn: Boolean = true

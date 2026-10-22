@@ -392,7 +392,7 @@ fun MainScreen(
                             Icon(Icons.Default.Send, contentDescription = null, tint = AccentBlue)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Telegram WS Proxy",
+                                text = if (tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) "Telegram (sTGWS)" else "Telegram (MTProto)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -411,22 +411,31 @@ fun MainScreen(
                     }
 
                     Text(
-                        text = if (isTgProxyRunning) "Активен на 127.0.0.1:${tgConfig.port}" else "Остановлен",
+                        text = if (!tgConfig.enabled) {
+                            "Отключен"
+                        } else if (tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
+                            if (isTgProxyRunning && isConnected) "Прозрачный режим активен (настройка не требуется)"
+                            else if (isTgProxyRunning) "Готов к работе (включите VPN)"
+                            else "Остановлен"
+                        } else {
+                            if (isTgProxyRunning) "Активен на 127.0.0.1:${tgConfig.port}" else "Остановлен"
+                        },
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isTgProxyRunning) GreenPrimary else TextSecondary
+                        color = if (isTgProxyRunning && (tgConfig.mode == com.multibypass.app.data.model.TelegramMode.MTPROTO_PROXY || isConnected)) GreenPrimary else TextSecondary
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Button(
-                        onClick = { TelegramProxyController.openTelegramProxy(context, tgConfig.port) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
-                    ) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Подключить в Telegram")
+                    if (tgConfig.enabled && tgConfig.mode == com.multibypass.app.data.model.TelegramMode.MTPROTO_PROXY) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { TelegramProxyController.openTelegramProxy(context, tgConfig.port) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Подключить в Telegram")
+                        }
                     }
                 }
             }
