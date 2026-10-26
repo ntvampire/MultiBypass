@@ -28,7 +28,6 @@ import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
-import com.multibypass.app.ui.components.AppPickerBottomSheet
 import com.multibypass.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,10 +48,7 @@ fun MainScreen(
     val smartHostsCount by SmartHostsManager.domainCount.collectAsState()
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
     val tgConfig by repository.tgConfig.collectAsState()
-    val routedApps by repository.routedApps.collectAsState()
-    val routeAllApps by repository.routeAllApps.collectAsState()
 
-    var showAppPicker by remember { mutableStateOf(false) }
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
     val isConnected = vpnStatus == VpnStatus.CONNECTED
@@ -168,108 +164,6 @@ fun MainScreen(
             )
 
             Spacer(modifier = Modifier.height(20.dp))
-
-            // Routing Mode Card (Split-tunnel)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Apps, contentDescription = null, tint = AccentBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Маршрутизация приложений",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            onClick = {
-                                repository.setRouteAllApps(false)
-                                if (isConnected) MultiBypassVpnService.reconnect(context)
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (!routeAllApps) AccentBlue.copy(alpha = 0.18f) else DarkBackground,
-                            border = BorderStroke(1.dp, if (!routeAllApps) AccentBlue else CardBorder),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Только выбранные",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (!routeAllApps) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (!routeAllApps) AccentBlue else TextSecondary
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = {
-                                repository.setRouteAllApps(true)
-                                if (isConnected) MultiBypassVpnService.reconnect(context)
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (routeAllApps) AccentBlue.copy(alpha = 0.18f) else DarkBackground,
-                            border = BorderStroke(1.dp, if (routeAllApps) AccentBlue else CardBorder),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Все приложения",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (routeAllApps) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (routeAllApps) AccentBlue else TextSecondary
-                                )
-                            }
-                        }
-                    }
-
-                    if (!routeAllApps) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Выбрано: ${routedApps.size} приложений",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            TextButton(
-                                onClick = { showAppPicker = true },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text("Изменить список", color = AccentBlue, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
 
             // Pillar 1: SmartHosts Geoblock Card
             Card(
@@ -422,12 +316,19 @@ fun MainScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (isConnected && isTgProxyRunning) GreenPrimary else TextSecondary
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Настройка прокси внутри Telegram не требуется",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = GreenPrimary.copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "💡 В настройках Telegram отключите прокси (Данные и память → Прокси). Обход работает прозрачно!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = GreenPrimary,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
                     } else {
                         Text(
                             text = "Отключен (трафик Telegram не перехватывается)",
@@ -440,17 +341,6 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
-    }
-
-    if (showAppPicker) {
-        AppPickerBottomSheet(
-            title = "Приложения для маршрутизации",
-            selectedPackages = routedApps,
-            onDismiss = { showAppPicker = false },
-            onSave = { updated ->
-                repository.updateRoutedApps(updated)
-            }
-        )
     }
 
     if (showDiagnosticsDialog) {

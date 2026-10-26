@@ -122,7 +122,7 @@ object NetworkDiagnostics {
             }
         )
 
-        // 3. Anti-DPI SOCKS5 HTTP Access (YouTube generate_204)
+        // 3. Anti-DPI SOCKS5 HTTP Access (YouTube Interface)
         if (byeDpiListening) {
             val testHttpStart = System.currentTimeMillis()
             val httpResult = testSocks5Http("127.0.0.1", byeDpiPort, "https://www.youtube.com/generate_204", 4000)
@@ -130,7 +130,7 @@ object NetworkDiagnostics {
             steps.add(
                 if (httpResult) {
                     DiagnosticStepResult(
-                        title = "Обход блокировки YouTube (HTTP)",
+                        title = "YouTube: Интерфейс и списки",
                         description = "Успешный отклик через ByeByeDPI SOCKS5",
                         status = DiagnosticStatus.SUCCESS,
                         latencyMs = httpTime,
@@ -138,7 +138,7 @@ object NetworkDiagnostics {
                     )
                 } else {
                     DiagnosticStepResult(
-                        title = "Обход блокировки YouTube (HTTP)",
+                        title = "YouTube: Интерфейс и списки",
                         description = "Не удалось получить отклик через SOCKS5",
                         status = DiagnosticStatus.WARNING,
                         detail = "Попробуйте изменить параметры десинхронизации"
@@ -148,7 +148,7 @@ object NetworkDiagnostics {
         } else {
             steps.add(
                 DiagnosticStepResult(
-                    title = "Обход блокировки YouTube (HTTP)",
+                    title = "YouTube: Интерфейс и списки",
                     description = "VPN не подключен",
                     status = DiagnosticStatus.SKIPPED,
                     detail = "Требуется запустить VPN для проверки десинхронизации"
@@ -303,25 +303,73 @@ object NetworkDiagnostics {
             )
         }
 
-        // 7. Bypass LAN Check
-        steps.add(
-            DiagnosticStepResult(
-                title = "Обход локальной сети (Bypass LAN)",
-                description = "Включен по умолчанию",
-                status = DiagnosticStatus.SUCCESS,
-                detail = "Подсети 192.168.0.0/16, 10.0.0.0/8 направляются мимо туннеля"
+        // 7. YouTube Video Stream CDN Check
+        if (byeDpiListening) {
+            val streamStart = System.currentTimeMillis()
+            val streamOk = testSocks5Http("127.0.0.1", byeDpiPort, "https://redirector.googlevideo.com/generate_204", 4000)
+            val streamTime = System.currentTimeMillis() - streamStart
+            steps.add(
+                if (streamOk) {
+                    DiagnosticStepResult(
+                        title = "YouTube: Видеопоток (GGC CDN)",
+                        description = "Серверы googlevideo.com доступны ($streamTime мс)",
+                        status = DiagnosticStatus.SUCCESS,
+                        latencyMs = streamTime,
+                        detail = "Воспроизведение видео не блокируется"
+                    )
+                } else {
+                    DiagnosticStepResult(
+                        title = "YouTube: Видеопоток (GGC CDN)",
+                        description = "Видеосерверы googlevideo.com заблокированы ТСПУ",
+                        status = DiagnosticStatus.WARNING,
+                        latencyMs = streamTime,
+                        detail = "Попробуйте другую стратегию десинхронизации"
+                    )
+                }
             )
-        )
+        } else {
+            steps.add(
+                DiagnosticStepResult(
+                    title = "YouTube: Видеопоток (GGC CDN)",
+                    description = "Требуется запуск VPN",
+                    status = DiagnosticStatus.SKIPPED
+                )
+            )
+        }
 
-        // 8. QUIC Protocol Check
-        steps.add(
-            DiagnosticStepResult(
-                title = "Протокол QUIC (HTTP/3)",
-                description = "Прозрачный режим (OpenWrt)",
-                status = DiagnosticStatus.SUCCESS,
-                detail = "UDP 443 передается прозрачно без зависаний"
+        // 8. YouTube Thumbnails & Covers Check
+        if (byeDpiListening) {
+            val thumbStart = System.currentTimeMillis()
+            val thumbOk = testSocks5Http("127.0.0.1", byeDpiPort, "https://i.ytimg.com/generate_204", 4000)
+            val thumbTime = System.currentTimeMillis() - thumbStart
+            steps.add(
+                if (thumbOk) {
+                    DiagnosticStepResult(
+                        title = "YouTube: Превью и обложки",
+                        description = "Серверы i.ytimg.com доступны ($thumbTime мс)",
+                        status = DiagnosticStatus.SUCCESS,
+                        latencyMs = thumbTime,
+                        detail = "Обложки видео и аватары загружаются штатно"
+                    )
+                } else {
+                    DiagnosticStepResult(
+                        title = "YouTube: Превью и обложки",
+                        description = "Серверы i.ytimg.com недоступны",
+                        status = DiagnosticStatus.WARNING,
+                        latencyMs = thumbTime,
+                        detail = "Проверьте список доменов Анти-DPI"
+                    )
+                }
             )
-        )
+        } else {
+            steps.add(
+                DiagnosticStepResult(
+                    title = "YouTube: Превью и обложки",
+                    description = "Требуется запуск VPN",
+                    status = DiagnosticStatus.SKIPPED
+                )
+            )
+        }
 
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
         DiagnosticsReport(steps = steps, allOk = allOk)

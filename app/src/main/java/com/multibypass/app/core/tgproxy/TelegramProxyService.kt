@@ -82,6 +82,10 @@ class TelegramProxyService : Service() {
         serviceScope.launch {
             mutex.withLock {
                 try {
+                    ensureCfDomainsCache()
+                    NativeTgProxy.setCfProxyCacheDir(cacheDir.absolutePath)
+                    NativeTgProxy.setCfProxyConfig(enabled = true, priority = 1, userDomain = "")
+
                     val secret = repository.tgConfig.value.secret
                     val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
                     if (res == 0) {
@@ -113,6 +117,10 @@ class TelegramProxyService : Service() {
         delay(300)
         return try {
             val repository = SettingsRepository.getInstance(applicationContext)
+            ensureCfDomainsCache()
+            NativeTgProxy.setCfProxyCacheDir(cacheDir.absolutePath)
+            NativeTgProxy.setCfProxyConfig(enabled = true, priority = 1, userDomain = "")
+
             val secret = repository.tgConfig.value.secret
             val res = NativeTgProxy.startProxy(host = "127.0.0.1", port = 1443, secret = secret)
             val success = (res == 0)
@@ -156,5 +164,21 @@ class TelegramProxyService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun ensureCfDomainsCache() {
+        try {
+            val cacheFile = java.io.File(cacheDir, "cfproxy-domains-cache.txt")
+            if (!cacheFile.exists() || cacheFile.length() == 0L) {
+                assets.open("cfproxy_domains.txt").use { input ->
+                    cacheFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.i(TAG, "Pre-seeded cfproxy-domains-cache.txt from assets")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to ensure CF domains cache: ${e.message}")
+        }
     }
 }

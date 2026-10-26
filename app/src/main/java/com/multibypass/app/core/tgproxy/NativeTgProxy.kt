@@ -36,6 +36,22 @@ object NativeTgProxy {
         return TgProxyLibrary.INSTANCE.StopProxy()
     }
 
+    fun setCfProxyCacheDir(cacheDir: String) {
+        try {
+            TgProxyLibrary.INSTANCE.SetCfProxyCacheDir(cacheDir)
+        } catch (e: Throwable) {
+            android.util.Log.w("NativeTgProxy", "Failed to set CF proxy cache dir: ${e.message}")
+        }
+    }
+
+    fun setCfProxyConfig(enabled: Boolean, priority: Int = 1, userDomain: String = "") {
+        try {
+            TgProxyLibrary.INSTANCE.SetCfProxyConfig(if (enabled) 1 else 0, priority, userDomain)
+        } catch (e: Throwable) {
+            android.util.Log.w("NativeTgProxy", "Failed to set CF proxy config: ${e.message}")
+        }
+    }
+
     fun getSecretWithPrefix(): String? {
         val ptr = TgProxyLibrary.INSTANCE.GetSecretWithPrefix() ?: return null
         val result = ptr.getString(0)

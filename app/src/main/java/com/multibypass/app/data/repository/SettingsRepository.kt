@@ -59,7 +59,7 @@ class SettingsRepository(private val context: Context) {
     private val _routedApps = MutableStateFlow(loadRoutedApps())
     val routedApps: StateFlow<List<String>> = _routedApps.asStateFlow()
 
-    private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
+    private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, true))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
 
     private val _lastStrategyResults = MutableStateFlow(loadLastStrategyResults())

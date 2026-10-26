@@ -29,6 +29,7 @@ struct params default_params = {
         .ipv6 = 1,
         .resolve = 1,
         .udp = 1,
+        .block_quic = 0,
         .max_open = 512,
         .bfsize = 16384,
         .baddr = {

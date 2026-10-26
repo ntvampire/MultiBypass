@@ -793,6 +793,11 @@ int on_udp_tunnel(struct poolhd *pool, struct eval *val, int et)
                 return -1;
             }
 
+            if (params.block_quic && ntohs(addr.in.sin_port) == 443) {
+                LOG(LOG_S, "drop UDP 443 (QUIC)\n");
+                continue;
+            }
+
             if (g_dns_redirect_port > 0 && ntohs(addr.in.sin_port) == 53) {
                 pair->orig_addr = addr;
                 memset(&addr, 0, sizeof(addr));

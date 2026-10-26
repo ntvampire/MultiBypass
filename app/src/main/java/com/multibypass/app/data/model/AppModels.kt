@@ -7,7 +7,7 @@ data class SmartHostsConfig(
 )
 
 data class AntiDpiGroupConfig(
-    val strategy: String = "-o1 -r-5+se -a1",
+    val strategy: String = "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c --block-quic",
     val domains: List<String> = listOf(
         "youtube.com",
         "youtu.be",

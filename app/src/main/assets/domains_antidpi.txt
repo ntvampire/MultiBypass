@@ -1,5 +1,6 @@
 # MultiBypass - Десинхронизация TCP (ByeByeDPI)
-# Мобильные узлы YouTube CDN, Discord Voice/Gateway, Meta, X, Signal
+# YouTube Video CDN, Превью, Аватары, Discord, Meta, X, Signal
+c.youtube.com
 cdn.discordapp.com
 cdninstagram.com
 cloudflare-ech.com
@@ -32,10 +33,16 @@ fbcdn.net
 gateway.discord.gg
 gateway.instagram.com
 ggpht.com
+googleapis.com
+googleusercontent.com
 googlevideo.com
 graph.instagram.com
+gstatic.com
+gvt1.com
+gvt2.com
 i.instagram.com
 i.ytimg.com
+i9.ytimg.com
 instagram.com
 jnn-pa.googleapis.com
 manifest.googlevideo.com
@@ -45,6 +52,7 @@ redirector.googlevideo.com
 signal.org
 stable.dl2.discordapp.net
 status.discord.com
+suggestqueries.google.com
 t.co
 threads.net
 twimg.com
@@ -62,6 +70,7 @@ youtube.googleapis.com
 youtubeembeddedplayer.googleapis.com
 youtubei.googleapis.com
 youtubekids.com
+yt.be
 yt3.ggpht.com
 yt4.ggpht.com
 ytimg.com

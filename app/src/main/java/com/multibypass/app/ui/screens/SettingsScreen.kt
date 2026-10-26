@@ -26,7 +26,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.multibypass.app.BuildConfig
 import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.core.updater.UpdateInfo
+import com.multibypass.app.core.vpn.MultiBypassVpnService
+import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
+import com.multibypass.app.ui.components.AppPickerBottomSheet
 import com.multibypass.app.ui.theme.*
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.launch
@@ -44,6 +47,9 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
+    val routeAllApps by repository.routeAllApps.collectAsState()
+    val routedApps by repository.routedApps.collectAsState()
+    var showAppPicker by remember { mutableStateOf(false) }
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
 
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
@@ -125,6 +131,63 @@ fun SettingsScreen(
                         checked = bootAutoStart,
                         onCheckedChange = { repository.setBootAutoStart(it) }
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // App Routing Mode Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Все приложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                if (routeAllApps) "Защита SmartHosts, Telegram и Анти-DPI активна для всех приложений"
+                                else "Защита активна только для выбранных приложений",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Switch(
+                            checked = routeAllApps,
+                            onCheckedChange = { isChecked ->
+                                repository.setRouteAllApps(isChecked)
+                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                    MultiBypassVpnService.reconnect(context)
+                                }
+                            }
+                        )
+                    }
+
+                    if (!routeAllApps) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Выбрано: ${routedApps.size} приложений",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                            TextButton(
+                                onClick = { showAppPicker = true }
+                            ) {
+                                Text("Выбрать приложения", color = AccentBlue)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -428,6 +491,20 @@ fun SettingsScreen(
     if (showDiagnosticsDialog) {
         com.multibypass.app.ui.components.DiagnosticsDialog(
             onDismissRequest = { showDiagnosticsDialog = false }
+        )
+    }
+
+    if (showAppPicker) {
+        AppPickerBottomSheet(
+            title = "Приложения для маршрутизации",
+            selectedPackages = routedApps,
+            onDismiss = { showAppPicker = false },
+            onSave = { updated ->
+                repository.updateRoutedApps(updated)
+                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                    MultiBypassVpnService.reconnect(context)
+                }
+            }
         )
     }
 }

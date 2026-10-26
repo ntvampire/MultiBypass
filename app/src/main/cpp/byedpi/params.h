@@ -155,6 +155,7 @@ struct params {
     bool ipv6;
     bool resolve;
     bool udp;
+    bool block_quic;
     bool delay_conn;
     bool auto_reconnect;
     int max_open;
