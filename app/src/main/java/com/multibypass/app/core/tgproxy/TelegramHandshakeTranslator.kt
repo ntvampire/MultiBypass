@@ -26,7 +26,11 @@ object TelegramHandshakeTranslator {
         val proxyDecryptCipher: Cipher
     )
 
-    fun translateHandshake(clientHs: ByteArray, proxySecretHex: String): SessionCiphers? {
+    fun translateHandshake(
+        clientHs: ByteArray,
+        proxySecretHex: String,
+        guessedDc: Int = 2
+    ): SessionCiphers? {
         if (clientHs.size != HANDSHAKE_LEN) return null
 
         val dirKey = clientHs.copyOfRange(8, 40)
@@ -43,7 +47,9 @@ object TelegramHandshakeTranslator {
         val t2 = decryptedHs[58].toInt() and 0xFF
         val t3 = decryptedHs[59].toInt() and 0xFF
 
-        val isAbridged = (t0 == 0xef && t1 == 0xef && t2 == 0xef && t3 == 0xef)
+        // В MTProto Abridged транспорт определяется 1 байтом 0xEF (байты 57..59 произвольные).
+        // Intermediate и Padded требуют 4 одинаковых байта (0xEEEEEEEE и 0xDDDDDDDD).
+        val isAbridged = (t0 == 0xef)
         val isIntermediate = (t0 == 0xee && t1 == 0xee && t2 == 0xee && t3 == 0xee)
         val isPadded = (t0 == 0xdd && t1 == 0xdd && t2 == 0xdd && t3 == 0xdd)
 
@@ -55,8 +61,10 @@ object TelegramHandshakeTranslator {
         val dcRaw = ((decryptedHs[60].toInt() and 0xFF) or ((decryptedHs[61].toInt() and 0xFF) shl 8)).toShort()
         val isMedia = dcRaw < 0
         var dc = if (isMedia) -dcRaw.toInt() else dcRaw.toInt()
-        if (dc == 0 || dc > 255) {
-            dc = 2 // Fallback на DC2 по умолчанию, если клиент не указал
+        // При прямом подключении клиент не указывает DC (он подключается на IP дата-центра).
+        // В таком случае используем DC, определённый по IP-адресу назначения.
+        if (dc <= 0 || dc > 255) {
+            dc = if (guessedDc in 1..255) guessedDc else 2
         }
 
         // 2. Инициализируем шифратор для ответов прямому клиенту (dirEncKey, dirEncIv)
@@ -104,10 +112,35 @@ object TelegramHandshakeTranslator {
         proxyEncryptCipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(hashDec, "AES"), IvParameterSpec(pIv))
         val pEncryptedFull = proxyEncryptCipher.update(proxyHs)
 
+        // Формируем хвост: Rust tgwsproxy требует ровно 4 байта валидного тега (0xEFEFEFEF, 0xEEEEEEEE, 0xDDDDDDDD)
         val tailPlain = ByteArray(8)
-        System.arraycopy(decryptedHs, 56, tailPlain, 0, 4) // протокол (4 байта)
-        System.arraycopy(decryptedHs, 60, tailPlain, 4, 2) // DC (2 байта)
-        random.nextBytes(tailPlain.copyOfRange(6, 8))
+        when {
+            isAbridged -> {
+                tailPlain[0] = 0xef.toByte()
+                tailPlain[1] = 0xef.toByte()
+                tailPlain[2] = 0xef.toByte()
+                tailPlain[3] = 0xef.toByte()
+            }
+            isIntermediate -> {
+                tailPlain[0] = 0xee.toByte()
+                tailPlain[1] = 0xee.toByte()
+                tailPlain[2] = 0xee.toByte()
+                tailPlain[3] = 0xee.toByte()
+            }
+            isPadded -> {
+                tailPlain[0] = 0xdd.toByte()
+                tailPlain[1] = 0xdd.toByte()
+                tailPlain[2] = 0xdd.toByte()
+                tailPlain[3] = 0xdd.toByte()
+            }
+        }
+        val effectiveDcRaw = if (isMedia) (-dc).toShort() else dc.toShort()
+        tailPlain[4] = (effectiveDcRaw.toInt() and 0xFF).toByte()
+        tailPlain[5] = ((effectiveDcRaw.toInt() shr 8) and 0xFF).toByte()
+        val tailRand = ByteArray(2)
+        random.nextBytes(tailRand)
+        tailPlain[6] = tailRand[0]
+        tailPlain[7] = tailRand[1]
 
         for (i in 0 until 8) {
             val keystreamTail = (pEncryptedFull[56 + i].toInt() xor proxyHs[56 + i].toInt()).toByte()

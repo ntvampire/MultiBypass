@@ -44,6 +44,15 @@ class MultiBypassVpnService : VpnService() {
         private val _vpnStatus = MutableStateFlow(VpnStatus.DISCONNECTED)
         val vpnStatus: StateFlow<VpnStatus> = _vpnStatus.asStateFlow()
 
+        val TELEGRAM_APP_PACKAGES = setOf(
+            "org.telegram.messenger",
+            "org.telegram.messenger.web",
+            "org.telegram.plus",
+            "org.thunderdog.challegram",
+            "nekox.messenger",
+            "org.telegram.BifToGram"
+        )
+
         fun start(context: Context) {
             val intent = Intent(context, MultiBypassVpnService::class.java).apply {
                 action = ACTION_START
@@ -162,7 +171,12 @@ class MultiBypassVpnService : VpnService() {
                     // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
                     if (!routeAll && allowedApps.isNotEmpty()) {
-                        for (pkg in allowedApps) {
+                        val effectiveApps = if (tgConfig.enabled && tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
+                            (allowedApps + TELEGRAM_APP_PACKAGES).distinct()
+                        } else {
+                            allowedApps
+                        }
+                        for (pkg in effectiveApps) {
                             try {
                                 addAllowedApplication(pkg)
                             } catch (e: Exception) {

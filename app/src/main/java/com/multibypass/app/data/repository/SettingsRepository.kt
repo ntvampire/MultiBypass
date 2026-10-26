@@ -141,11 +141,17 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun updateTgConfig(config: TelegramProxyConfig) {
+        val wasEnabled = _tgConfig.value.enabled
         _tgConfig.value = config
         prefs.edit()
             .putString(KEY_TG_CONFIG, gson.toJson(config))
             .putString(KEY_TG_SECRET, config.secret)
             .apply()
+
+        // Если обход выключен пользователем, гарантированно останавливаем сервис прокси
+        if (wasEnabled && !config.enabled) {
+            com.multibypass.app.core.tgproxy.TelegramProxyService.stop(context)
+        }
     }
 
     fun isTelegramTransparentActive(): Boolean {

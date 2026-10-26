@@ -26,7 +26,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.multibypass.app.BuildConfig
 import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.core.updater.UpdateInfo
-import com.multibypass.app.data.model.TelegramMode
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.theme.*
 import androidx.activity.compose.BackHandler
@@ -45,7 +44,6 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val bootAutoStart by repository.bootAutoStart.collectAsState()
-    val tgConfig by repository.tgConfig.collectAsState()
     val downloadProgress by AppUpdateManager.downloadProgress.collectAsState()
 
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
@@ -132,98 +130,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Telegram Settings
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Обход блокировки Telegram", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text("WebSocket туннелирование через Cloudflare CDN", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        }
-                        Switch(
-                            checked = tgConfig.enabled,
-                            onCheckedChange = { repository.updateTgConfig(tgConfig.copy(enabled = it)) }
-                        )
-                    }
 
-                    if (tgConfig.enabled) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text("Режим работы", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Option 1: Transparent (sTGWS)
-                        Surface(
-                            onClick = { repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.TRANSPARENT)) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (tgConfig.mode == TelegramMode.TRANSPARENT) CardBorder.copy(alpha = 0.35f) else DarkBackground,
-                            border = BorderStroke(1.dp, if (tgConfig.mode == TelegramMode.TRANSPARENT) GreenPrimary else CardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = tgConfig.mode == TelegramMode.TRANSPARENT,
-                                    onClick = { repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.TRANSPARENT)) },
-                                    colors = RadioButtonDefaults.colors(selectedColor = GreenPrimary)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Прозрачный режим (sTGWS)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        "Без настроек в Telegram. Прямой перехват запросов Telegram в туннеле.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Option 2: MTProto Proxy
-                        Surface(
-                            onClick = { repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.MTPROTO_PROXY)) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (tgConfig.mode == TelegramMode.MTPROTO_PROXY) CardBorder.copy(alpha = 0.35f) else DarkBackground,
-                            border = BorderStroke(1.dp, if (tgConfig.mode == TelegramMode.MTPROTO_PROXY) GreenPrimary else CardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = tgConfig.mode == TelegramMode.MTPROTO_PROXY,
-                                    onClick = { repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.MTPROTO_PROXY)) },
-                                    colors = RadioButtonDefaults.colors(selectedColor = GreenPrimary)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("Классический MTProto-прокси", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        "Локальный прокси на 127.0.0.1:1443. Требует включения прокси в Telegram.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Stability & Background operation
             Card(

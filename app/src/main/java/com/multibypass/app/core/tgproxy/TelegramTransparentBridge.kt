@@ -39,8 +39,13 @@ object TelegramTransparentBridge {
                 return@withContext
             }
 
-            // 2. Транслируем рукопожатие
-            val session = TelegramHandshakeTranslator.translateHandshake(clientHs, secret)
+            // 2. Транслируем рукопожатие с автоматическим определением DC по IP назначения
+            val guessedDc = TelegramDcRanges.guessDcForIp(targetIp)
+            val session = TelegramHandshakeTranslator.translateHandshake(
+                clientHs = clientHs,
+                proxySecretHex = secret,
+                guessedDc = guessedDc
+            )
             if (session == null) {
                 // Если входящий пакет не является MTProto (например, сторонний HTTP probe),
                 // прозрачно перенаправляем его на ByeByeDPI

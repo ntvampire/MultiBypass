@@ -195,30 +195,7 @@ object NetworkDiagnostics {
             )
         }
 
-        // 5. SmartDNS Geoblock Bypass (ChatGPT / OpenAI resolution)
-        val aiStart = System.currentTimeMillis()
-        val aiResolved = testDnsResolution(standardIp, 53, "chatgpt.com", 2500)
-        val aiTime = System.currentTimeMillis() - aiStart
-        steps.add(
-            if (aiResolved != null) {
-                DiagnosticStepResult(
-                    title = "SmartDNS: Доступ к ChatGPT / AI",
-                    description = "chatgpt.com -> $aiResolved",
-                    status = DiagnosticStatus.SUCCESS,
-                    latencyMs = aiTime,
-                    detail = "Геоблокировка успешно обходится выбранным DNS"
-                )
-            } else {
-                DiagnosticStepResult(
-                    title = "SmartDNS: Доступ к ChatGPT / AI",
-                    description = "chatgpt.com не разрешен",
-                    status = DiagnosticStatus.WARNING,
-                    detail = "Проверьте выбранный DNS-сервер или обновите списки правил"
-                )
-            }
-        )
-
-        // 6. Anti-DPI SOCKS5 HTTP Access (YouTube generate_204)
+        // 5. Anti-DPI SOCKS5 HTTP Access (YouTube generate_204)
         if (byeDpiListening) {
             val testHttpStart = System.currentTimeMillis()
             val httpResult = testSocks5Http("127.0.0.1", byeDpiPort, "https://www.youtube.com/generate_204", 4000)
@@ -252,41 +229,100 @@ object NetworkDiagnostics {
             )
         }
 
-        // 7. Telegram MTProto Proxy Check
+        // 6. Telegram Check (sTGWS / MTProto / Disabled)
         val tgConfig = repository.tgConfig.value
-        if (tgConfig.enabled) {
+        if (!tgConfig.enabled) {
+            steps.add(
+                DiagnosticStepResult(
+                    title = "Обход Telegram",
+                    description = "Отключен пользователем",
+                    status = DiagnosticStatus.SKIPPED,
+                    detail = "Трафик Telegram направляется напрямую через провайдера"
+                )
+            )
+        } else if (tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
+            val isBridgeListening = isTcpPortOpen("127.0.0.1", tgConfig.port, 1000)
+            val isVpnConnected = (vpnStatus == VpnStatus.CONNECTED)
+
+            if (!isVpnConnected) {
+                steps.add(
+                    DiagnosticStepResult(
+                        title = "Telegram (sTGWS, прямой режим)",
+                        description = "VPN не подключен",
+                        status = DiagnosticStatus.WARNING,
+                        detail = "Прозрачный перехват требует активного VPN-туннеля"
+                    )
+                )
+            } else if (!isBridgeListening) {
+                steps.add(
+                    DiagnosticStepResult(
+                        title = "Telegram (sTGWS, прямой режим)",
+                        description = "Служба туннелирования остановлена",
+                        status = DiagnosticStatus.ERROR,
+                        detail = "Локальный мост 127.0.0.1:${tgConfig.port} не отвечает"
+                    )
+                )
+            } else {
+                val tgStart = System.currentTimeMillis()
+                val isDirectConnOk = testSocks5TcpConnect(
+                    proxyHost = "127.0.0.1",
+                    proxyPort = com.multibypass.app.core.vpn.Socks5Dispatcher.DEFAULT_PORT,
+                    targetIp = "149.154.167.50",
+                    targetPort = 443,
+                    timeoutMs = 3000
+                )
+                val tgTime = System.currentTimeMillis() - tgStart
+
+                if (isDirectConnOk) {
+                    steps.add(
+                        DiagnosticStepResult(
+                            title = "Telegram (sTGWS, прямой режим)",
+                            description = "Прямой обход активен ($tgTime мс)",
+                            status = DiagnosticStatus.SUCCESS,
+                            latencyMs = tgTime,
+                            detail = "Трафик прозрачно туннелируется через Cloudflare (прокси в TG не требуется)"
+                        )
+                    )
+                } else {
+                    steps.add(
+                        DiagnosticStepResult(
+                            title = "Telegram (sTGWS, прямой режим)",
+                            description = "Локальный шлюз активен, но прямой отклик не получен",
+                            status = DiagnosticStatus.WARNING,
+                            latencyMs = tgTime,
+                            detail = "Возможна задержка подключения к шлюзам Cloudflare или нестабильная сеть"
+                        )
+                    )
+                }
+            }
+        } else {
+            // Режим классического MTProto-прокси
             val tgStart = System.currentTimeMillis()
             val tgOpen = isTcpPortOpen("127.0.0.1", tgConfig.port, 1000)
             val tgTime = System.currentTimeMillis() - tgStart
-            steps.add(
-                if (tgOpen) {
+            if (tgOpen) {
+                steps.add(
                     DiagnosticStepResult(
-                        title = "Telegram MTProto Прокси",
-                        description = "Локальный шлюз активен",
+                        title = "Telegram (MTProto-прокси)",
+                        description = "Локальный шлюз активен ($tgTime мс)",
                         status = DiagnosticStatus.SUCCESS,
                         latencyMs = tgTime,
-                        detail = "127.0.0.1:${tgConfig.port}"
+                        detail = "127.0.0.1:${tgConfig.port} (требуется включение прокси в приложении Telegram)"
                     )
-                } else {
+                )
+            } else {
+                steps.add(
                     DiagnosticStepResult(
-                        title = "Telegram MTProto Прокси",
+                        title = "Telegram (MTProto-прокси)",
                         description = "Порт ${tgConfig.port} закрыт",
                         status = DiagnosticStatus.WARNING,
-                        detail = "Служба включена, но локальный порт не отвечает"
+                        detail = "Служба включена, но порт 127.0.0.1:${tgConfig.port} не отвечает"
                     )
-                }
-            )
-        } else {
-            steps.add(
-                DiagnosticStepResult(
-                    title = "Telegram MTProto Прокси",
-                    description = "Отключен пользователем",
-                    status = DiagnosticStatus.SKIPPED
                 )
-            )
+            }
         }
 
-        // 8. Bypass LAN Check
+        // 7. Bypass LAN Check
         steps.add(
             DiagnosticStepResult(
                 title = "Обход локальной сети (Bypass LAN)",
@@ -296,7 +332,7 @@ object NetworkDiagnostics {
             )
         )
 
-        // 9. QUIC Protocol Check
+        // 8. QUIC Protocol Check
         steps.add(
             DiagnosticStepResult(
                 title = "Протокол QUIC (HTTP/3)",
@@ -306,7 +342,7 @@ object NetworkDiagnostics {
             )
         )
 
-        // 10. Direct SmartDNS for Gemini Check
+        // 9. Direct SmartDNS for Gemini Check
         val geminiStart = System.currentTimeMillis()
         val geminiResolved = testDnsResolution(standardIp, 53, "gemini.google.com", 2500)
         val geminiTime = System.currentTimeMillis() - geminiStart
@@ -508,6 +544,44 @@ object NetworkDiagnostics {
             }
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun testSocks5TcpConnect(proxyHost: String, proxyPort: Int, targetIp: String, targetPort: Int, timeoutMs: Int): Boolean {
+        var socket: Socket? = null
+        return try {
+            socket = Socket()
+            socket.soTimeout = timeoutMs
+            socket.connect(InetSocketAddress(proxyHost, proxyPort), timeoutMs)
+            val sIn = socket.getInputStream()
+            val sOut = socket.getOutputStream()
+
+            // SOCKS5 Greeting
+            sOut.write(byteArrayOf(0x05, 0x01, 0x00))
+            sOut.flush()
+            val greeting = ByteArray(2)
+            if (sIn.read(greeting) < 2 || greeting[1] != 0x00.toByte()) {
+                return false
+            }
+
+            // SOCKS5 Connect IPv4
+            val ipParts = targetIp.split(".").map { it.toInt().toByte() }
+            val req = byteArrayOf(
+                0x05, 0x01, 0x00, 0x01,
+                ipParts[0], ipParts[1], ipParts[2], ipParts[3],
+                ((targetPort shr 8) and 0xFF).toByte(),
+                (targetPort and 0xFF).toByte()
+            )
+            sOut.write(req)
+            sOut.flush()
+
+            val resp = ByteArray(10)
+            val read = sIn.read(resp)
+            read >= 4 && resp[1] == 0x00.toByte()
+        } catch (_: Exception) {
+            false
+        } finally {
+            try { socket?.close() } catch (_: Exception) {}
         }
     }
 }
