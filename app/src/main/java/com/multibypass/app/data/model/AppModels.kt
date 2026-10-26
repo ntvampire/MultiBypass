@@ -1,114 +1,10 @@
 package com.multibypass.app.data.model
 
-enum class DnsMode {
-    STANDARD,
-    DOH
-}
-
-data class DnsPreset(
-    val id: String,
-    val name: String,
-    val standardIp: String,
-    val dohUrl: String,
-    val requiresProfileId: Boolean = false,
-    val description: String = ""
+data class SmartHostsConfig(
+    val enabled: Boolean = true,
+    val domainCount: Int = 0,
+    val lastUpdated: Long = 0L
 )
-
-data class DnsGroupConfig(
-    val mode: DnsMode = DnsMode.DOH,
-    val presetId: String = "comss",
-    val customStandardIp: String = "195.133.25.16",
-    val customDohUrl: String = "https://dns.comss.one/dns-query",
-    val nextDnsProfileId: String = "",
-    val domains: List<String> = listOf(
-        "openai.com",
-        "chatgpt.com",
-        "oaistatic.com",
-        "oaiusercontent.com",
-        "auth0.openai.com",
-        "api.openai.com",
-        "chat.openai.com",
-        "platform.openai.com",
-        "anthropic.com",
-        "claude.ai",
-        "claude.com",
-        "copilot.microsoft.com",
-        "sydney.bing.com",
-        "edgeservices.bing.com",
-        "midjourney.com",
-        "perplexity.ai",
-        "poe.com",
-        "spotify.com",
-        "scdn.co",
-        "spotifycdn.com",
-        "canva.com",
-        "notion.so",
-        "linkedin.com",
-        "gemini.google.com",
-        "bard.google.com",
-        "aistudio.google.com",
-        "generativeai.google.com",
-        "generativeai.google",
-        "generativelanguage.googleapis.com",
-        "ai.google.dev",
-        "apis.google.com",
-        "makersuite.google.com",
-        "alkalimakersuite-pa.clients6.google.com",
-        "proactivebackend-pa.googleapis.com",
-        "assistant.google.com",
-        "playstation.com",
-        "sonyentertainmentnetwork.com",
-        "xboxlive.com",
-        "medium.com",
-        "soundcloud.com",
-        "sndcdn.com",
-        "audio-ak-spotify-com.akamaized.net",
-        "heads4-ak-spotify-com.akamaized.net"
-    ),
-    val appPackages: List<String> = emptyList()
-) {
-    fun getEffectiveDns(): String {
-        return when (mode) {
-            DnsMode.STANDARD -> getEffectiveStandardIp()
-            DnsMode.DOH -> {
-                val preset = com.multibypass.app.core.dns.DnsPresets.findById(presetId)
-                if (preset.id != "custom" && preset.dohUrl.isNotBlank()) {
-                    if (preset.requiresProfileId) {
-                        val profile = nextDnsProfileId.trim().ifBlank { "dns" }
-                        return "${preset.dohUrl.trimEnd('/')}/$profile"
-                    }
-                    return preset.dohUrl
-                }
-                when (presetId) {
-                    "comss" -> "https://dns.comss.one/dns-query"
-                    "wlrus" -> "https://dns.wlrus.cfd/dns-query"
-                    "webshift" -> "https://dns.comss.one/dns-query"
-                    "dns_ai" -> "https://dns.dns-ai.ru/dns-query"
-                    "nextdns" -> {
-                        val profile = nextDnsProfileId.trim().ifBlank { "dns" }
-                        "https://dns.nextdns.io/$profile"
-                    }
-                    else -> customDohUrl.ifBlank { "https://dns.comss.one/dns-query" }
-                }
-            }
-        }
-    }
-
-    fun getEffectiveStandardIp(): String {
-        val preset = com.multibypass.app.core.dns.DnsPresets.findById(presetId)
-        if (preset.id != "custom" && preset.standardIp.isNotBlank()) {
-            return preset.standardIp
-        }
-        return when (presetId) {
-            "comss" -> "195.133.25.16"
-            "wlrus" -> "138.124.254.134"
-            "webshift" -> "31.31.207.68"
-            "dns_ai" -> "45.151.102.219"
-            "nextdns" -> "45.90.28.0"
-            else -> customStandardIp.ifBlank { "195.133.25.16" }
-        }
-    }
-}
 
 data class AntiDpiGroupConfig(
     val strategy: String = "-o1 -r-5+se -a1",
@@ -160,14 +56,8 @@ data class AntiDpiGroupConfig(
     val appPackages: List<String> = emptyList()
 )
 
-enum class TelegramMode {
-    TRANSPARENT,
-    MTPROTO_PROXY
-}
-
 data class TelegramProxyConfig(
     val enabled: Boolean = true,
-    val mode: TelegramMode = TelegramMode.TRANSPARENT,
     val port: Int = 1443,
     val secret: String = "112233445566778899aabbccddeeff00",
     val autoStartWithVpn: Boolean = true

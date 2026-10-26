@@ -50,13 +50,13 @@ class TelegramProxyTileService : TileService() {
         val tile = qsTile ?: return
         if (running) {
             tile.state = Tile.STATE_ACTIVE
-            tile.label = "TG Proxy"
+            tile.label = "Telegram"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                tile.subtitle = "127.0.0.1:1443"
+                tile.subtitle = "sTGWS Активен"
             }
         } else {
             tile.state = Tile.STATE_INACTIVE
-            tile.label = "TG Proxy"
+            tile.label = "Telegram"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 tile.subtitle = "Остановлен"
             }

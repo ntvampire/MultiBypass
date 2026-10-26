@@ -149,39 +149,12 @@ class TelegramProxyService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val repository = SettingsRepository.getInstance(applicationContext)
-        val isTransparent = repository.tgConfig.value.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT
-        val title = if (isTransparent) "Telegram (sTGWS)" else "Telegram WS Proxy"
-        val text = if (isTransparent) "Прозрачный режим активен (настройка не требуется)" else "Локальный MTProto прокси активен (порт 1443)"
-
         return NotificationCompat.Builder(this, MultiBypassApplication.TG_NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(text)
+            .setContentTitle("Telegram (sTGWS)")
+            .setContentText("Прозрачный режим активен (настройка не требуется)")
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
-    }
-}
-
-object TelegramProxyController {
-    fun openTelegramProxy(context: Context, port: Int = 1443) {
-        val repository = SettingsRepository.getInstance(context)
-        val rawSecret = repository.tgConfig.value.secret
-        val nativeSecret = NativeTgProxy.getSecretWithPrefix()
-        val secret = if (!nativeSecret.isNullOrBlank() && !nativeSecret.contains("00000000000000000000000000000000")) {
-            nativeSecret
-        } else {
-            "dd$rawSecret"
-        }
-        val proxyUri = Uri.parse("tg://proxy?server=127.0.0.1&port=$port&secret=$secret")
-        val intent = Intent(Intent.ACTION_VIEW, proxyUri).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.w("TgController", "Cannot open Telegram directly: ${e.message}")
-        }
     }
 }

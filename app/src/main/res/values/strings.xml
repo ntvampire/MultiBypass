@@ -1,12 +1,12 @@
 <resources>
     <string name="app_name">MultiBypass</string>
-    <string name="vpn_service_description">MultiBypass: раздельная маршрутизация сетевого трафика и защищённый DNS</string>
+    <string name="vpn_service_description">MultiBypass: раздельная маршрутизация сетевого трафика и обход блокировок</string>
     <string name="notification_channel_name">Служба MultiBypass</string>
     <string name="notification_channel_desc">Отображает статус работы VPN и прокси</string>
     <string name="vpn_connected">MultiBypass активен</string>
     <string name="vpn_disconnected">MultiBypass остановлен</string>
     <string name="vpn_action_stop">Остановить</string>
-    <string name="tg_notification_channel_name">Telegram WS Proxy</string>
+    <string name="tg_notification_channel_name">Telegram sTGWS</string>
     <string name="tile_vpn_label">MultiBypass</string>
-    <string name="tile_tg_label">Telegram Proxy</string>
+    <string name="tile_tg_label">Telegram</string>
 </resources>

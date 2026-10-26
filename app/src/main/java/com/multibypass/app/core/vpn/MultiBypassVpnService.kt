@@ -17,6 +17,7 @@ import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
+import com.multibypass.app.core.smarthosts.SmartHostsManager
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.VpnStatus
@@ -30,6 +31,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
+import java.net.DatagramSocket
+import java.net.Socket
 
 class MultiBypassVpnService : VpnService() {
 
@@ -43,6 +46,17 @@ class MultiBypassVpnService : VpnService() {
 
         private val _vpnStatus = MutableStateFlow(VpnStatus.DISCONNECTED)
         val vpnStatus: StateFlow<VpnStatus> = _vpnStatus.asStateFlow()
+
+        @Volatile
+        private var instance: MultiBypassVpnService? = null
+
+        fun protectSocket(socket: DatagramSocket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
+
+        fun protectSocket(socket: Socket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
 
         val TELEGRAM_APP_PACKAGES = setOf(
             "org.telegram.messenger",
@@ -89,6 +103,11 @@ class MultiBypassVpnService : VpnService() {
     private val vpnMutex = Mutex()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -123,9 +142,11 @@ class MultiBypassVpnService : VpnService() {
         serviceScope.launch {
             try {
                 val repository = SettingsRepository.getInstance(applicationContext)
-                val dnsConfig = repository.dnsConfig.value
                 val antiDpiConfig = repository.antiDpiConfig.value
                 val tgConfig = repository.tgConfig.value
+
+                // 0. Initialize SmartHosts geoblock database
+                SmartHostsManager.initialize(applicationContext)
 
                 // 1. Start ByeByeDPI daemon on port 1080 with clean anti-DPI hosts whitelist
                 ByeDpiController.ensureHostsFile(applicationContext)
@@ -135,15 +156,10 @@ class MultiBypassVpnService : VpnService() {
                     ByeDpiProxy.setDnsRedirectPort(0)
                 } catch (_: Exception) {}
 
-                // 2. Start Telegram WS Proxy if enabled
-                if (tgConfig.enabled && (tgConfig.autoStartWithVpn || tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT)) {
+                // 2. Start Telegram sTGWS tunnel if enabled
+                if (tgConfig.enabled) {
                     TelegramProxyService.start(applicationContext)
                 }
-
-                // 3. Direct SmartDNS (like OpenWrt / v1.2.1)
-                // Real SmartDNS IP (e.g. 92.223.109.31 for Comss, 83.217.211.149 for Zapret)
-                // Traffic to port 53 UDP goes directly through SOCKS5 tunnel without local proxy overhead
-                val effectiveDns = dnsConfig.getEffectiveStandardIp()
 
                 val routeAll = repository.routeAllApps.value
                 val allowedApps = repository.routedApps.value
@@ -161,7 +177,8 @@ class MultiBypassVpnService : VpnService() {
                     addAddress("10.10.10.10", 32)
                     setMtu(1500)
                     setupRoutesWithLanBypass(this)
-                    addDnsServer(effectiveDns)
+                    // Virtual DNS address routed into Socks5Dispatcher SmartHosts relay
+                    addDnsServer("10.10.10.53")
 
                     allowBypass()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -171,7 +188,7 @@ class MultiBypassVpnService : VpnService() {
                     // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
                     if (!routeAll && allowedApps.isNotEmpty()) {
-                        val effectiveApps = if (tgConfig.enabled && tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
+                        val effectiveApps = if (tgConfig.enabled) {
                             (allowedApps + TELEGRAM_APP_PACKAGES).distinct()
                         } else {
                             allowedApps
@@ -228,7 +245,7 @@ class MultiBypassVpnService : VpnService() {
                 registerNetworkTracking()
 
                 _vpnStatus.value = VpnStatus.CONNECTED
-                Log.i(TAG, "MultiBypass VPN connected successfully (SmartDNS: $effectiveDns:53)")
+                Log.i(TAG, "MultiBypass VPN connected successfully (SmartHosts active)")
                 ServiceWatchdog.triggerCheck(1000)
 
             } catch (e: Exception) {
@@ -276,7 +293,7 @@ class MultiBypassVpnService : VpnService() {
                 } catch (_: Exception) {}
 
                 val repository = SettingsRepository.getInstance(applicationContext)
-                if (repository.tgConfig.value.autoStartWithVpn || repository.tgConfig.value.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
+                if (repository.tgConfig.value.enabled) {
                     TelegramProxyService.stop(applicationContext)
                 }
 
@@ -364,6 +381,7 @@ class MultiBypassVpnService : VpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         stopVpn()
         serviceScope.cancel()
     }
@@ -385,7 +403,7 @@ class MultiBypassVpnService : VpnService() {
 
         return NotificationCompat.Builder(this, MultiBypassApplication.VPN_NOTIFICATION_CHANNEL_ID)
             .setContentTitle(getString(R.string.vpn_connected))
-            .setContentText("DNS маршрутизация и десинхронизация активны")
+            .setContentText("SmartHosts и десинхронизация активны")
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(pendingIntent)
             .addAction(0, getString(R.string.vpn_action_stop), stopIntent)

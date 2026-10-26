@@ -4,9 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.multibypass.app.data.model.AntiDpiGroupConfig
-import com.multibypass.app.data.model.DnsGroupConfig
+import com.multibypass.app.data.model.SmartHostsConfig
 import com.multibypass.app.data.model.StrategyTestResult
-import com.multibypass.app.data.model.TelegramMode
 import com.multibypass.app.data.model.TelegramProxyConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +15,7 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "multibypass_prefs"
-        private const val KEY_DNS_CONFIG = "key_dns_config"
+        private const val KEY_SMARTHOSTS_CONFIG = "key_smarthosts_config"
         private const val KEY_ANTIDPI_CONFIG = "key_antidpi_config"
         private const val KEY_TG_CONFIG = "key_tg_config"
         private const val KEY_TG_SECRET = "key_tg_secret"
@@ -25,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 7
+        private const val CURRENT_DOMAINS_VERSION = 8
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -42,8 +41,8 @@ class SettingsRepository(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val gson = Gson()
 
-    private val _dnsConfig = MutableStateFlow(loadDnsConfig())
-    val dnsConfig: StateFlow<DnsGroupConfig> = _dnsConfig.asStateFlow()
+    private val _smartHostsConfig = MutableStateFlow(loadSmartHostsConfig())
+    val smartHostsConfig: StateFlow<SmartHostsConfig> = _smartHostsConfig.asStateFlow()
 
     private val _antiDpiConfig = MutableStateFlow(loadAntiDpiConfig())
     val antiDpiConfig: StateFlow<AntiDpiGroupConfig> = _antiDpiConfig.asStateFlow()
@@ -73,26 +72,8 @@ class SettingsRepository(private val context: Context) {
         // Enforce watchdog always enabled
         prefs.edit().putBoolean(KEY_WATCHDOG_ENABLED, true).apply()
 
-        // Force-upgrade default domains & default strategy if coming from older versions
         val domainVer = prefs.getInt(KEY_DOMAINS_VERSION, 0)
         if (domainVer < CURRENT_DOMAINS_VERSION) {
-            val defaultDns = DnsGroupConfig()
-            val currentDns = _dnsConfig.value
-            val mergedDnsDomains = (defaultDns.domains + currentDns.domains).distinct()
-            val validPresetIds = setOf("comss", "wlrus", "webshift", "dns_ai", "nextdns", "custom")
-            val newPresetId = if (currentDns.presetId in validPresetIds) currentDns.presetId else "comss"
-            val newStandardIp = if (currentDns.customStandardIp == "92.223.109.31" || currentDns.customStandardIp.isBlank()) {
-                "195.133.25.16"
-            } else {
-                currentDns.customStandardIp
-            }
-            val newDns = currentDns.copy(
-                domains = mergedDnsDomains,
-                presetId = newPresetId,
-                customStandardIp = newStandardIp
-            )
-            updateDnsConfig(newDns)
-
             val defaultAntiDpi = AntiDpiGroupConfig()
             val currentAntiDpi = _antiDpiConfig.value
             val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
@@ -106,6 +87,7 @@ class SettingsRepository(private val context: Context) {
                 strategy = newStrategy
             )
             updateAntiDpiConfig(newAntiDpi)
+
             val currentRouted = _routedApps.value.toMutableList()
             if (currentRouted.contains("com.google.android.apps.bard") && !currentRouted.contains("com.google.android.gms")) {
                 currentRouted.add("com.google.android.gms")
@@ -119,8 +101,6 @@ class SettingsRepository(private val context: Context) {
     fun updateRoutedApps(apps: List<String>) {
         _routedApps.value = apps
         prefs.edit().putString(KEY_ROUTED_APPS, gson.toJson(apps)).apply()
-        _dnsConfig.value = _dnsConfig.value.copy(appPackages = apps)
-        prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(_dnsConfig.value)).apply()
         _antiDpiConfig.value = _antiDpiConfig.value.copy(appPackages = apps)
         prefs.edit().putString(KEY_ANTIDPI_CONFIG, gson.toJson(_antiDpiConfig.value)).apply()
     }
@@ -130,9 +110,9 @@ class SettingsRepository(private val context: Context) {
         prefs.edit().putBoolean(KEY_ROUTE_ALL_APPS, enabled).apply()
     }
 
-    fun updateDnsConfig(config: DnsGroupConfig) {
-        _dnsConfig.value = config
-        prefs.edit().putString(KEY_DNS_CONFIG, gson.toJson(config)).apply()
+    fun updateSmartHostsConfig(config: SmartHostsConfig) {
+        _smartHostsConfig.value = config
+        prefs.edit().putString(KEY_SMARTHOSTS_CONFIG, gson.toJson(config)).apply()
     }
 
     fun updateAntiDpiConfig(config: AntiDpiGroupConfig) {
@@ -155,8 +135,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     fun isTelegramTransparentActive(): Boolean {
-        val cfg = _tgConfig.value
-        return cfg.enabled && cfg.mode == TelegramMode.TRANSPARENT
+        return _tgConfig.value.enabled
     }
 
     fun setBootAutoStart(enabled: Boolean) {
@@ -199,7 +178,7 @@ class SettingsRepository(private val context: Context) {
                 emptyList()
             }
         }
-        val legacy = (loadDnsConfig().appPackages + loadAntiDpiConfig().appPackages).distinct()
+        val legacy = loadAntiDpiConfig().appPackages.distinct()
         if (legacy.isNotEmpty()) {
             return legacy
         }
@@ -222,12 +201,12 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    private fun loadDnsConfig(): DnsGroupConfig {
-        val json = prefs.getString(KEY_DNS_CONFIG, null) ?: return DnsGroupConfig()
+    private fun loadSmartHostsConfig(): SmartHostsConfig {
+        val json = prefs.getString(KEY_SMARTHOSTS_CONFIG, null) ?: return SmartHostsConfig()
         return try {
-            gson.fromJson(json, DnsGroupConfig::class.java) ?: DnsGroupConfig()
+            gson.fromJson(json, SmartHostsConfig::class.java) ?: SmartHostsConfig()
         } catch (_: Exception) {
-            DnsGroupConfig()
+            SmartHostsConfig()
         }
     }
 

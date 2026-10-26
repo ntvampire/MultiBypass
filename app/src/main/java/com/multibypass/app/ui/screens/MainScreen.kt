@@ -23,11 +23,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.multibypass.app.core.dns.DnsPresets
-import com.multibypass.app.core.tgproxy.TelegramProxyController
+import com.multibypass.app.core.smarthosts.SmartHostsManager
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
-import com.multibypass.app.data.model.TelegramMode
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import com.multibypass.app.ui.components.AppPickerBottomSheet
@@ -36,7 +34,6 @@ import com.multibypass.app.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    onNavigateToDns: () -> Unit,
     onNavigateToAntiDpi: () -> Unit,
     onNavigateToAutoStrategy: () -> Unit = {},
     onNavigateToSettings: () -> Unit,
@@ -48,7 +45,8 @@ fun MainScreen(
     val vpnStatus by MultiBypassVpnService.vpnStatus.collectAsState()
     val isTgProxyRunning by TelegramProxyService.isRunning.collectAsState()
 
-    val dnsConfig by repository.dnsConfig.collectAsState()
+    val smartHostsConfig by repository.smartHostsConfig.collectAsState()
+    val smartHostsCount by SmartHostsManager.domainCount.collectAsState()
     val antiDpiConfig by repository.antiDpiConfig.collectAsState()
     val tgConfig by repository.tgConfig.collectAsState()
     val routedApps by repository.routedApps.collectAsState()
@@ -78,7 +76,7 @@ fun MainScreen(
                             Icons.Default.VpnLock,
                             contentDescription = null,
                             tint = GreenPrimary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -96,24 +94,15 @@ fun MainScreen(
                             tint = GreenPrimary
                         )
                     }
-                    if (isConnected) {
-                        IconButton(onClick = {
-                            MultiBypassVpnService.reconnect(context)
-                        }) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Быстрый перезапуск сокетов",
-                                tint = GreenPrimary
-                            )
-                        }
-                    }
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Настройки",
+                            tint = TextSecondary
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBackground
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
         containerColor = DarkBackground
@@ -122,18 +111,19 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Main Power Button
+            // Main Connect Button
             Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(160.dp)
+                    .size(180.dp)
                     .clip(CircleShape)
-                    .background(buttonColor.copy(alpha = 0.15f))
+                    .background(buttonColor.copy(alpha = 0.12f))
                     .border(3.dp, buttonColor, CircleShape)
                     .clickable {
                         if (isConnected) {
@@ -141,153 +131,47 @@ fun MainScreen(
                         } else {
                             onRequestVpnPermission()
                         }
-                    },
-                contentAlignment = Alignment.Center
+                    }
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.PowerSettingsNew,
-                        contentDescription = "Включение",
-                        tint = if (isConnected) GreenPrimary else TextPrimary,
+                        contentDescription = "Подключить",
+                        tint = buttonColor,
                         modifier = Modifier.size(56.dp)
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = when (vpnStatus) {
-                            VpnStatus.CONNECTED -> "АКТИВЕН"
-                            VpnStatus.CONNECTING -> "ПОДКЛЮЧЕНИЕ..."
-                            VpnStatus.FAILED -> "СБОЙ"
-                            VpnStatus.DISCONNECTED -> "ОТКЛЮЧЕН"
+                        text = when {
+                            isConnected -> "ПОДКЛЮЧЕНО"
+                            isConnecting -> "ПОДКЛЮЧЕНИЕ..."
+                            else -> "ПОДКЛЮЧИТЬ"
                         },
-                        style = MaterialTheme.typography.labelMedium,
+                        color = buttonColor,
                         fontWeight = FontWeight.Bold,
-                        color = if (isConnected) GreenPrimary else TextSecondary
+                        fontSize = 13.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Direct Bypass notice banner
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = DarkSurfaceVariant.copy(alpha = 0.6f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = GreenPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Все остальные адреса и приложения работают напрямую через вашу сеть",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-            }
+            // Status message
+            Text(
+                text = when {
+                    isConnected -> "Защита активна: DPI, Telegram и зарубежные сервисы"
+                    isConnecting -> "Установка туннеля..."
+                    else -> "Нажмите кнопку для активации обхода"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isConnected) GreenPrimary else TextSecondary
+            )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Unified App Routing Card
+            // Routing Mode Card (Split-tunnel)
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // Header Row: Title & Icon
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Apps, contentDescription = null, tint = GreenPrimary)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Приложения для маршрутизации",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Mode Selection Row: Switch & Mode Label
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (routeAllApps) "Все приложения (глобально)" else "Только выбранные (раздельно)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (routeAllApps) AccentOrange else GreenPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Switch(
-                            checked = !routeAllApps,
-                            onCheckedChange = { isSelectedOnly ->
-                                repository.setRouteAllApps(!isSelectedOnly)
-                            }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = if (routeAllApps) {
-                            "Глобальный режим: все приложения на устройстве идут через MultiBypass"
-                        } else {
-                            val geoCount = routedApps.count { com.multibypass.app.data.model.GEOBLOCK_PACKAGES.contains(it) }
-                            val antiDpiCount = routedApps.count { com.multibypass.app.data.model.ANTIDPI_PACKAGES.contains(it) }
-                            val otherCount = routedApps.size - geoCount - antiDpiCount
-                            val parts = buildList {
-                                if (geoCount > 0) add("$geoCount ИИ/Геоблок")
-                                if (antiDpiCount > 0) add("$antiDpiCount Anti-DPI")
-                                if (otherCount > 0) add("$otherCount других")
-                            }.joinToString(", ")
-                            val detail = if (parts.isNotEmpty()) " ($parts)" else ""
-                            "Раздельная маршрутизация: ${routedApps.size} выбрано$detail. Невыбранные приложения идут напрямую."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-
-                    if (!routeAllApps) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = { showAppPicker = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp), tint = GreenPrimary)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Настроить приложения (${routedApps.size})",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Group 1: Custom DNS Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToDns() },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
@@ -299,38 +183,152 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Dns, contentDescription = null, tint = AccentBlue)
+                            Icon(Icons.Default.Apps, contentDescription = null, tint = AccentBlue)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Свой DNS",
+                                text = "Маршрутизация приложений",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    val presetName = DnsPresets.findById(dnsConfig.presetId).name
-                    Text(
-                        text = "Сервер: $presetName",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AccentBlue
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                repository.setRouteAllApps(false)
+                                if (isConnected) MultiBypassVpnService.reconnect(context)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (!routeAllApps) AccentBlue.copy(alpha = 0.18f) else DarkBackground,
+                            border = BorderStroke(1.dp, if (!routeAllApps) AccentBlue else CardBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Только выбранные",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (!routeAllApps) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (!routeAllApps) AccentBlue else TextSecondary
+                                )
+                            }
+                        }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Адресов в правилах: ${dnsConfig.domains.size}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+                        Surface(
+                            onClick = {
+                                repository.setRouteAllApps(true)
+                                if (isConnected) MultiBypassVpnService.reconnect(context)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (routeAllApps) AccentBlue.copy(alpha = 0.18f) else DarkBackground,
+                            border = BorderStroke(1.dp, if (routeAllApps) AccentBlue else CardBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Все приложения",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (routeAllApps) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (routeAllApps) AccentBlue else TextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    if (!routeAllApps) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Выбрано: ${routedApps.size} приложений",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                            TextButton(
+                                onClick = { showAppPicker = true },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Изменить список", color = AccentBlue, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Pillar 1: SmartHosts Geoblock Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Public, contentDescription = null, tint = AccentBlue)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Обход геоблокировок",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Switch(
+                            checked = smartHostsConfig.enabled,
+                            onCheckedChange = { isChecked ->
+                                repository.updateSmartHostsConfig(smartHostsConfig.copy(enabled = isChecked))
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (smartHostsConfig.enabled) {
+                        Text(
+                            text = "ChatGPT, Claude, Gemini, Adobe, Canva и др.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AccentBlue
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val totalCount = if (smartHostsCount > 0) smartHostsCount else smartHostsConfig.domainCount
+                        Text(
+                            text = "База Noktomezo: ${if (totalCount > 0) "$totalCount адресов" else "подключена"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    } else {
+                        Text(
+                            text = "Отключен (зарубежные сервисы открываются напрямую)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Group 2: Anti-DPI Card
+            // Pillar 2: Anti-DPI Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -349,7 +347,7 @@ fun MainScreen(
                             Icon(Icons.Default.Shield, contentDescription = null, tint = AccentOrange)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Десинхронизация TCP",
+                                text = "Десинхронизация TCP (Анти-DPI)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -368,7 +366,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Адресов в правилах: ${antiDpiConfig.domains.size}",
+                        text = "YouTube, Discord, Rutracker (${antiDpiConfig.domains.size} адресов)",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -377,7 +375,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Telegram Proxy Card
+            // Pillar 3: Telegram sTGWS Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -391,10 +389,10 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Send, contentDescription = null, tint = AccentBlue)
+                            Icon(Icons.Default.Send, contentDescription = null, tint = GreenPrimary)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Обход Telegram",
+                                text = "Обход Telegram (sTGWS)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -404,7 +402,7 @@ fun MainScreen(
                             onCheckedChange = { isChecked ->
                                 repository.updateTgConfig(tgConfig.copy(enabled = isChecked))
                                 if (isChecked) {
-                                    if (isConnected || tgConfig.autoStartWithVpn || tgConfig.mode == TelegramMode.TRANSPARENT) {
+                                    if (isConnected) {
                                         TelegramProxyService.start(context)
                                     }
                                 } else {
@@ -414,100 +412,28 @@ fun MainScreen(
                         )
                     }
 
-                    if (!tgConfig.enabled) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (tgConfig.enabled) {
+                        Text(
+                            text = if (isConnected && isTgProxyRunning) "● Прозрачный туннель Cloudflare активен"
+                            else if (isTgProxyRunning) "○ Ожидает запуск VPN"
+                            else "○ Служба остановлена",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isConnected && isTgProxyRunning) GreenPrimary else TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Настройка прокси внутри Telegram не требуется",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    } else {
                         Text(
                             text = "Отключен (трафик Telegram не перехватывается)",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
-                    } else {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Переключатель режимов: Прямой (sTGWS) vs Прокси (MTProto)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val isTransparent = (tgConfig.mode == TelegramMode.TRANSPARENT)
-                            Surface(
-                                onClick = {
-                                    repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.TRANSPARENT))
-                                    if (isConnected) TelegramProxyService.start(context)
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isTransparent) GreenPrimary.copy(alpha = 0.18f) else DarkBackground,
-                                border = BorderStroke(1.dp, if (isTransparent) GreenPrimary else CardBorder),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Прямой (sTGWS)",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isTransparent) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isTransparent) GreenPrimary else TextSecondary
-                                    )
-                                }
-                            }
-
-                            val isProxy = (tgConfig.mode == TelegramMode.MTPROTO_PROXY)
-                            Surface(
-                                onClick = {
-                                    repository.updateTgConfig(tgConfig.copy(mode = TelegramMode.MTPROTO_PROXY))
-                                    TelegramProxyService.start(context)
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isProxy) AccentBlue.copy(alpha = 0.18f) else DarkBackground,
-                                border = BorderStroke(1.dp, if (isProxy) AccentBlue else CardBorder),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Прокси (MTProto)",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isProxy) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isProxy) AccentBlue else TextSecondary
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Описание и статус выбранного режима
-                        if (tgConfig.mode == TelegramMode.TRANSPARENT) {
-                            Text(
-                                text = if (isConnected && isTgProxyRunning) "● Прозрачный режим активен (настройка в TG не требуется)"
-                                else if (isTgProxyRunning) "○ Ожидает запуск VPN"
-                                else "○ Служба остановлена",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isConnected && isTgProxyRunning) GreenPrimary else TextSecondary
-                            )
-                        } else {
-                            Text(
-                                text = if (isTgProxyRunning) "● Локальный шлюз 127.0.0.1:${tgConfig.port} активен"
-                                else "○ Локальный шлюз остановлен",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isTgProxyRunning) GreenPrimary else TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = { TelegramProxyController.openTelegramProxy(context, tgConfig.port) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
-                            ) {
-                                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Подключить в Telegram")
-                            }
-                        }
                     }
                 }
             }

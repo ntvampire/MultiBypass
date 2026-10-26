@@ -3,17 +3,16 @@ package com.multibypass.app.core.diagnostics
 import android.content.Context
 import android.os.Build
 import com.multibypass.app.core.byedpi.ByeDpiController
-import com.multibypass.app.core.dns.DnsPresets
+import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
+import com.multibypass.app.core.smarthosts.SmartHostsManager
 import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -123,79 +122,7 @@ object NetworkDiagnostics {
             }
         )
 
-        // 3. SmartDNS Upstream Server (UDP 53)
-        val dnsConfig = repository.dnsConfig.value
-        val standardIp = dnsConfig.getEffectiveStandardIp()
-        val preset = DnsPresets.findById(dnsConfig.presetId)
-        val dnsStart = System.currentTimeMillis()
-        val dnsResolved = testDnsResolution(standardIp, 53, "google.com", 2500)
-        val dnsTime = System.currentTimeMillis() - dnsStart
-        steps.add(
-            if (dnsResolved != null) {
-                DiagnosticStepResult(
-                    title = "SmartDNS сервер (UDP 53)",
-                    description = "Отвечает за $dnsTime мс",
-                    status = DiagnosticStatus.SUCCESS,
-                    latencyMs = dnsTime,
-                    detail = "${preset.name} ($standardIp:53)"
-                )
-            } else {
-                DiagnosticStepResult(
-                    title = "SmartDNS сервер (UDP 53)",
-                    description = "Нет ответа от $standardIp:53",
-                    status = DiagnosticStatus.WARNING,
-                    detail = "Возможна фильтрация UDP 53 оператором. Рекомендуется DoH или резервный IP"
-                )
-            }
-        )
-
-        // 4. DNS over HTTPS (DoH) Check
-        val dohUrl = if (dnsConfig.presetId == "custom") {
-            dnsConfig.customDohUrl.trim()
-        } else {
-            val p = DnsPresets.findById(dnsConfig.presetId)
-            if (p.requiresProfileId) {
-                val prof = dnsConfig.nextDnsProfileId.trim().ifBlank { "dns" }
-                "${p.dohUrl.trimEnd('/')}/$prof"
-            } else {
-                p.dohUrl.trim()
-            }
-        }
-
-        if (dohUrl.isNotBlank()) {
-            val dohStart = System.currentTimeMillis()
-            val dohOk = testDohQuery(dohUrl, "google.com", 3000)
-            val dohTime = System.currentTimeMillis() - dohStart
-            steps.add(
-                if (dohOk) {
-                    DiagnosticStepResult(
-                        title = "DNS over HTTPS (DoH)",
-                        description = "Шифрованный канал активен ($dohTime мс)",
-                        status = DiagnosticStatus.SUCCESS,
-                        latencyMs = dohTime,
-                        detail = dohUrl
-                    )
-                } else {
-                    DiagnosticStepResult(
-                        title = "DNS over HTTPS (DoH)",
-                        description = "Эндпоинт не ответил по HTTPS",
-                        status = DiagnosticStatus.WARNING,
-                        detail = "DoH URL: $dohUrl (запросы направляются через UDP 53)"
-                    )
-                }
-            )
-        } else {
-            steps.add(
-                DiagnosticStepResult(
-                    title = "DNS over HTTPS (DoH)",
-                    description = "Не настроен",
-                    status = DiagnosticStatus.SKIPPED,
-                    detail = "Для текущего профиля DoH URL не задан"
-                )
-            )
-        }
-
-        // 5. Anti-DPI SOCKS5 HTTP Access (YouTube generate_204)
+        // 3. Anti-DPI SOCKS5 HTTP Access (YouTube generate_204)
         if (byeDpiListening) {
             val testHttpStart = System.currentTimeMillis()
             val httpResult = testSocks5Http("127.0.0.1", byeDpiPort, "https://www.youtube.com/generate_204", 4000)
@@ -229,25 +156,77 @@ object NetworkDiagnostics {
             )
         }
 
-        // 6. Telegram Check (sTGWS / MTProto / Disabled)
+        // 4. SmartHosts Geoblock Check
+        val smartHostsConfig = repository.smartHostsConfig.value
+        if (!smartHostsConfig.enabled) {
+            steps.add(
+                DiagnosticStepResult(
+                    title = "Обход геоблокировок (SmartHosts)",
+                    description = "Отключен пользователем",
+                    status = DiagnosticStatus.SKIPPED,
+                    detail = "Домены зарубежных сервисов не перенаправляются"
+                )
+            )
+        } else {
+            val testDomain = "gemini.google.com"
+            val mappedIps = SmartHostsManager.resolve(testDomain) ?: SmartHostsManager.resolve("chatgpt.com")
+            if (mappedIps != null && mappedIps.isNotEmpty()) {
+                val proxyIp = mappedIps.first()
+                val shStart = System.currentTimeMillis()
+                val isProxyReachable = isTcpPortOpen(proxyIp, 443, 2500)
+                val shTime = System.currentTimeMillis() - shStart
+                if (isProxyReachable) {
+                    steps.add(
+                        DiagnosticStepResult(
+                            title = "Обход геоблокировок (SmartHosts)",
+                            description = "$testDomain -> $proxyIp ($shTime мс)",
+                            status = DiagnosticStatus.SUCCESS,
+                            latencyMs = shTime,
+                            detail = "Европейский SNI-релей доступен, резолв 0 мс"
+                        )
+                    )
+                } else {
+                    steps.add(
+                        DiagnosticStepResult(
+                            title = "Обход геоблокировок (SmartHosts)",
+                            description = "Резолв активен ($proxyIp), порт 443 не ответил",
+                            status = DiagnosticStatus.WARNING,
+                            latencyMs = shTime,
+                            detail = "Возможна фильтрация или недоступность релея"
+                        )
+                    )
+                }
+            } else {
+                steps.add(
+                    DiagnosticStepResult(
+                        title = "Обход геоблокировок (SmartHosts)",
+                        description = "База доменов не инициализирована",
+                        status = DiagnosticStatus.WARNING,
+                        detail = "Обновите базу в настройках приложения"
+                    )
+                )
+            }
+        }
+
+        // 5. Telegram Check (sTGWS, прямой режим)
         val tgConfig = repository.tgConfig.value
         if (!tgConfig.enabled) {
             steps.add(
                 DiagnosticStepResult(
-                    title = "Обход Telegram",
+                    title = "Обход Telegram (sTGWS)",
                     description = "Отключен пользователем",
                     status = DiagnosticStatus.SKIPPED,
                     detail = "Трафик Telegram направляется напрямую через провайдера"
                 )
             )
-        } else if (tgConfig.mode == com.multibypass.app.data.model.TelegramMode.TRANSPARENT) {
-            val isBridgeListening = isTcpPortOpen("127.0.0.1", tgConfig.port, 1000)
+        } else {
+            val isBridgeListening = isTcpPortOpen("127.0.0.1", 1443, 1000)
             val isVpnConnected = (vpnStatus == VpnStatus.CONNECTED)
 
             if (!isVpnConnected) {
                 steps.add(
                     DiagnosticStepResult(
-                        title = "Telegram (sTGWS, прямой режим)",
+                        title = "Telegram (sTGWS)",
                         description = "VPN не подключен",
                         status = DiagnosticStatus.WARNING,
                         detail = "Прозрачный перехват требует активного VPN-туннеля"
@@ -256,10 +235,10 @@ object NetworkDiagnostics {
             } else if (!isBridgeListening) {
                 steps.add(
                     DiagnosticStepResult(
-                        title = "Telegram (sTGWS, прямой режим)",
+                        title = "Telegram (sTGWS)",
                         description = "Служба туннелирования остановлена",
                         status = DiagnosticStatus.ERROR,
-                        detail = "Локальный мост 127.0.0.1:${tgConfig.port} не отвечает"
+                        detail = "Локальный мост 127.0.0.1:1443 не отвечает"
                     )
                 )
             } else {
@@ -276,7 +255,7 @@ object NetworkDiagnostics {
                 if (isDirectConnOk) {
                     steps.add(
                         DiagnosticStepResult(
-                            title = "Telegram (sTGWS, прямой режим)",
+                            title = "Telegram (sTGWS)",
                             description = "Прямой обход активен ($tgTime мс)",
                             status = DiagnosticStatus.SUCCESS,
                             latencyMs = tgTime,
@@ -286,40 +265,42 @@ object NetworkDiagnostics {
                 } else {
                     steps.add(
                         DiagnosticStepResult(
-                            title = "Telegram (sTGWS, прямой режим)",
-                            description = "Локальный шлюз активен, но прямой отклик не получен",
+                            title = "Telegram (sTGWS)",
+                            description = "Локальный шлюз активен, прямой отклик DC задержан",
                             status = DiagnosticStatus.WARNING,
                             latencyMs = tgTime,
-                            detail = "Возможна задержка подключения к шлюзам Cloudflare или нестабильная сеть"
+                            detail = "Возможна задержка подключения к шлюзам Cloudflare"
                         )
                     )
                 }
             }
+        }
+
+        // 6. Direct Internet & Carrier Whitelist Check
+        val upstreamDns = SmartHostsDnsRelay.getUpstreamDnsIp(context)
+        val directDnsStart = System.currentTimeMillis()
+        val directDnsOk = testDnsResolution(upstreamDns, 53, "ya.ru", 2500)
+        val directDnsTime = System.currentTimeMillis() - directDnsStart
+
+        if (directDnsOk != null) {
+            steps.add(
+                DiagnosticStepResult(
+                    title = "Прямой интернет (Белые списки)",
+                    description = "DNS сети $upstreamDns отвечает за $directDnsTime мс",
+                    status = DiagnosticStatus.SUCCESS,
+                    latencyMs = directDnsTime,
+                    detail = "ya.ru -> $directDnsOk (локальные ресурсы работают напрямую)"
+                )
+            )
         } else {
-            // Режим классического MTProto-прокси
-            val tgStart = System.currentTimeMillis()
-            val tgOpen = isTcpPortOpen("127.0.0.1", tgConfig.port, 1000)
-            val tgTime = System.currentTimeMillis() - tgStart
-            if (tgOpen) {
-                steps.add(
-                    DiagnosticStepResult(
-                        title = "Telegram (MTProto-прокси)",
-                        description = "Локальный шлюз активен ($tgTime мс)",
-                        status = DiagnosticStatus.SUCCESS,
-                        latencyMs = tgTime,
-                        detail = "127.0.0.1:${tgConfig.port} (требуется включение прокси в приложении Telegram)"
-                    )
+            steps.add(
+                DiagnosticStepResult(
+                    title = "Прямой интернет (Белые списки)",
+                    description = "Нет ответа от $upstreamDns:53",
+                    status = DiagnosticStatus.WARNING,
+                    detail = "Проверьте подключение к сети оператора связи"
                 )
-            } else {
-                steps.add(
-                    DiagnosticStepResult(
-                        title = "Telegram (MTProto-прокси)",
-                        description = "Порт ${tgConfig.port} закрыт",
-                        status = DiagnosticStatus.WARNING,
-                        detail = "Служба включена, но порт 127.0.0.1:${tgConfig.port} не отвечает"
-                    )
-                )
-            }
+            )
         }
 
         // 7. Bypass LAN Check
@@ -338,31 +319,8 @@ object NetworkDiagnostics {
                 title = "Протокол QUIC (HTTP/3)",
                 description = "Прозрачный режим (OpenWrt)",
                 status = DiagnosticStatus.SUCCESS,
-                detail = "UDP 443 передается прозрачно без дропов и зависаний интерфейса"
+                detail = "UDP 443 передается прозрачно без зависаний"
             )
-        )
-
-        // 9. Direct SmartDNS for Gemini Check
-        val geminiStart = System.currentTimeMillis()
-        val geminiResolved = testDnsResolution(standardIp, 53, "gemini.google.com", 2500)
-        val geminiTime = System.currentTimeMillis() - geminiStart
-        steps.add(
-            if (geminiResolved != null) {
-                DiagnosticStepResult(
-                    title = "SmartDNS: Gemini и сервисы Google",
-                    description = "gemini.google.com -> $geminiResolved ($geminiTime мс)",
-                    status = DiagnosticStatus.SUCCESS,
-                    latencyMs = geminiTime,
-                    detail = "SmartDNS перенаправляет запросы Gemini на европейский прокси"
-                )
-            } else {
-                DiagnosticStepResult(
-                    title = "SmartDNS: Gemini и сервисы Google",
-                    description = "gemini.google.com не ответил",
-                    status = DiagnosticStatus.WARNING,
-                    detail = "Проверьте выбранный DNS-сервер ($standardIp:53)"
-                )
-            }
         )
 
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
@@ -399,54 +357,6 @@ object NetworkDiagnostics {
             null
         } finally {
             try { socket?.close() } catch (_: Exception) {}
-        }
-    }
-
-    private fun testDohQuery(dohUrl: String, domain: String, timeoutMs: Int): Boolean {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-            .retryOnConnectionFailure(true)
-            .build()
-
-        val dnsQuery = buildDnsQuery(domain)
-
-        // Try POST first (RFC 8484)
-        try {
-            val postRequest = Request.Builder()
-                .url(dohUrl)
-                .header("Content-Type", "application/dns-message")
-                .header("Accept", "application/dns-message")
-                .header("User-Agent", "MultiBypass-Doctor/1.2")
-                .post(dnsQuery.toRequestBody("application/dns-message".toMediaType()))
-                .build()
-
-            client.newCall(postRequest).execute().use { resp ->
-                if (resp.isSuccessful) return true
-            }
-        } catch (_: Exception) {}
-
-        // Fallback to GET with URL-safe base64 query
-        return try {
-            val base64 = android.util.Base64.encodeToString(
-                dnsQuery,
-                android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
-            )
-            val separator = if (dohUrl.contains("?")) "&" else "?"
-            val getUrl = "$dohUrl${separator}dns=$base64"
-
-            val getRequest = Request.Builder()
-                .url(getUrl)
-                .header("Accept", "application/dns-message")
-                .header("User-Agent", "MultiBypass-Doctor/1.2")
-                .get()
-                .build()
-
-            client.newCall(getRequest).execute().use { resp ->
-                resp.isSuccessful
-            }
-        } catch (_: Exception) {
-            false
         }
     }
 
@@ -536,7 +446,7 @@ object NetworkDiagnostics {
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MultiBypass-Doctor/1.2")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MultiBypass-Doctor/2.0")
                 .build()
 
             client.newCall(request).execute().use { resp ->

@@ -291,7 +291,7 @@ fun SettingsScreen(
                                     val result = com.multibypass.app.core.lists.ListUpdateManager.forceUpdateAll(context)
                                     isUpdatingLists = false
                                     listsUpdateStatusMessage = if (result.success) {
-                                        "Обновлено: DNS (${result.dnsCount}), Anti-DPI (${result.antiDpiCount}), Стратегии (${result.strategiesCount}), Серверы (${result.dnsProvidersCount})"
+                                        "Обновлено: SmartHosts (${result.smartHostsCount}), Anti-DPI (${result.antiDpiCount}), Стратегии (${result.strategiesCount})"
                                     } else {
                                         result.errorMessage ?: "Ошибка загрузки списков"
                                     }
@@ -374,7 +374,7 @@ fun SettingsScreen(
                     Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "MultiBypass — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartDNS, ByeByeDPI, Telegram WebSocket Proxy).",
+                        text = "MultiBypass 2.0 — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartHosts, ByeByeDPI, Telegram sTGWS).",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
