@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 8
+        private const val CURRENT_DOMAINS_VERSION = 9
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -77,14 +77,21 @@ class SettingsRepository(private val context: Context) {
             val defaultAntiDpi = AntiDpiGroupConfig()
             val currentAntiDpi = _antiDpiConfig.value
             val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
-            val newStrategy = if (currentAntiDpi.strategy == "-f -1 -e 1 -q 1" || currentAntiDpi.strategy.isBlank()) {
+            val rawStrategy = if (currentAntiDpi.strategy == "-f -1 -e 1 -q 1" || currentAntiDpi.strategy.isBlank()) {
                 "-o1 -r-5+se -a1"
             } else {
                 currentAntiDpi.strategy
             }
+            // Strip any legacy QUIC flags from saved strategy
+            val cleanedStrategy = rawStrategy
+                .replace("--block-quic", "")
+                .replace("-J", "")
+                .trim()
+                .replace(Regex("\\s+"), " ")
+
             val newAntiDpi = currentAntiDpi.copy(
                 domains = mergedAntiDpiDomains,
-                strategy = newStrategy
+                strategy = cleanedStrategy
             )
             updateAntiDpiConfig(newAntiDpi)
 
@@ -93,6 +100,14 @@ class SettingsRepository(private val context: Context) {
                 currentRouted.add("com.google.android.gms")
                 updateRoutedApps(currentRouted.distinct())
             }
+
+            // Remove legacy strategies.txt cache if it existed so updated presets take effect
+            try {
+                val cachedStrategies = java.io.File(context.filesDir, "strategies.txt")
+                if (cachedStrategies.exists()) {
+                    cachedStrategies.delete()
+                }
+            } catch (_: Exception) {}
 
             prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()
         }

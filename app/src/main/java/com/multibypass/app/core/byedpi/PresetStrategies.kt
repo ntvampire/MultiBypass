@@ -29,21 +29,24 @@ import java.util.concurrent.TimeUnit
 
 object PresetStrategies {
     val defaultList = listOf(
-        "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c --block-quic",
-        "--disorder 1 --split 2 --fake-sni google.com --block-quic",
-        "-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -J",
-        "-Kt,h -o1 -s1+s -s3+s -s6+s -s9+s -s12+s -s15+s -s20+s -s30+s -a1 -At,r,s -d1 -Qr -f-1 -r2 -J",
-        "--fake -1 --ttl 8 --split 1+s --disorder 3+s -a1 -J",
-        "-s1 -d3+s -a1 -At -r1+s -a1 -J",
-        "-o1 -r-5+se -a1 -J",
-        "-f -1 -e 1 -q 1 -J",
-        "-d7 -s2 -a1 -J",
-        "-d1 -s3+s -a1 -J",
-        "-o3 -d7 -a1 -J",
-        "-o1 -s4 -s6 -a1 -J",
-        "-o1+s -d3+s -a1 -J",
-        "-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1 -J",
-        "-q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1 -J"
+        "-o1 -r-5+se -a1",
+        "-d1 -s3+s -a1",
+        "-s1 -d3+s -a1 -At -r1+s -a1",
+        "-d7 -s2 -a1",
+        "-o3 -d7 -a1",
+        "-o1 -s4 -s6 -a1",
+        "-o1+s -d3+s -a1",
+        "-f -1 -e 1 -q 1",
+        "-q1 -r25+s -a1",
+        "-f-1 -t8 -s1+s -a1",
+        "--fake -1 --ttl 8 --split 1+s --disorder 3+s -a1",
+        "--tlsrec 1+s --auto=torst -a1",
+        "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c",
+        "--disorder 1 --split 2 --fake-sni google.com",
+        "-d1 -d3+s -s6+s -d9+s -s20+s -d25+s -s30+s -a1",
+        "-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1",
+        "-Kt,h -o1 -s1+s -s3+s -s6+s -s9+s -s12+s -s15+s -s20+s -s30+s -a1 -At,r,s -d1 -Qr -f-1 -r2",
+        "-q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1"
     )
 
     val defaultTestTargets = listOf(
@@ -54,26 +57,28 @@ object PresetStrategies {
     )
 
     fun loadStrategies(context: Context): List<String> {
+        val assetList = try {
+            val assetName = if (context.assets.list("")?.contains("strategies.txt") == true) "strategies.txt" else "proxytest_strategies.list"
+            context.assets.open(assetName).bufferedReader().useLines { lines ->
+                lines.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.toList()
+            }.ifEmpty { defaultList }
+        } catch (_: Exception) {
+            defaultList
+        }
+
         val downloadedFile = java.io.File(context.filesDir, "strategies.txt")
         if (downloadedFile.exists() && downloadedFile.length() > 0) {
             try {
                 val list = downloadedFile.bufferedReader().useLines { lines ->
                     lines.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.toList()
                 }
-                if (list.isNotEmpty()) return list
+                if (list.size >= assetList.size) return list
             } catch (e: Exception) {
                 Log.w("PresetStrategies", "Failed to load downloaded strategies.txt: ${e.message}")
             }
         }
 
-        return try {
-            val assetName = if (context.assets.list("")?.contains("strategies.txt") == true) "strategies.txt" else "proxytest_strategies.list"
-            context.assets.open(assetName).bufferedReader().useLines { lines ->
-                lines.map { it.trim() }.filter { it.isNotBlank() && !it.startsWith("#") }.toList()
-            }.ifEmpty { defaultList }
-        } catch (e: Exception) {
-            defaultList
-        }
+        return assetList
     }
 
     fun loadTestTargets(context: Context): List<TestTarget> {

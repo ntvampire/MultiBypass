@@ -84,7 +84,6 @@ fun SettingsScreen(
     var updateStatusMessage by remember { mutableStateOf<String?>(null) }
     var isUpdatingLists by remember { mutableStateOf(false) }
     var listsUpdateStatusMessage by remember { mutableStateOf<String?>(null) }
-    var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -149,45 +148,28 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Все приложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Выбор приложений", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                if (routeAllApps) "Защита SmartHosts, Telegram и Анти-DPI активна для всех приложений"
-                                else "Защита активна только для выбранных приложений",
+                                "Выбор приложений для движка обхода",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
                         }
-                        Switch(
-                            checked = routeAllApps,
-                            onCheckedChange = { isChecked ->
-                                repository.setRouteAllApps(isChecked)
-                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
-                                    MultiBypassVpnService.reconnect(context)
-                                }
-                            }
-                        )
+                        TextButton(
+                            onClick = { showAppPicker = true }
+                        ) {
+                            Text("Настроить", color = AccentBlue)
+                        }
                     }
 
-                    if (!routeAllApps) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Выбрано: ${routedApps.size} приложений",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            TextButton(
-                                onClick = { showAppPicker = true }
-                            ) {
-                                Text("Выбрать приложения", color = AccentBlue)
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (routeAllApps) "Маршрутизируются все приложения"
+                               else "Выбрано: ${routedApps.size} прилож.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (routeAllApps) GreenPrimary else AccentBlue
+                    )
                 }
             }
 
@@ -326,10 +308,10 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Списки правил и DNS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Списки правил", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Правила DNS, десинхронизации и серверы SmartDNS",
+                        text = "База SmartHosts, домены Анти-DPI и стратегии десинхронизации",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -382,51 +364,6 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Network Doctor Section
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            Icons.Default.HealthAndSafety,
-                            contentDescription = null,
-                            tint = GreenPrimary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Сетевой доктор", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Экспресс-диагностика VPN, ByeByeDPI, SmartDNS и прокси",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = { showDiagnosticsDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Запустить диагностику")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // About Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -437,7 +374,7 @@ fun SettingsScreen(
                     Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "MultiBypass 2.0 — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartHosts, ByeByeDPI, Telegram sTGWS).",
+                        text = "MultiBypass — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartHosts, ByeByeDPI, Telegram sTGWS).",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -488,18 +425,14 @@ fun SettingsScreen(
         )
     }
 
-    if (showDiagnosticsDialog) {
-        com.multibypass.app.ui.components.DiagnosticsDialog(
-            onDismissRequest = { showDiagnosticsDialog = false }
-        )
-    }
-
     if (showAppPicker) {
         AppPickerBottomSheet(
-            title = "Приложения для маршрутизации",
+            title = "Приложения для обхода",
             selectedPackages = routedApps,
+            isRouteAll = routeAllApps,
             onDismiss = { showAppPicker = false },
-            onSave = { updated ->
+            onSave = { updated, isAll ->
+                repository.setRouteAllApps(isAll)
                 repository.updateRoutedApps(updated)
                 if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
                     MultiBypassVpnService.reconnect(context)

@@ -90,4 +90,21 @@ class SmartHostsManagerTest {
         assertTrue(res.contains("143.20.64.192"))
         assertTrue(res.contains("31.25.239.132"))
     }
+
+    @Test
+    fun test4pdaExclusion() {
+        val lines = listOf(
+            "181.215.40.49 4pda.to",
+            "181.215.40.49 s.4pda.to",
+            "181.215.40.49 4pda.ru",
+            "181.215.40.49 chatgpt.com"
+        )
+        val count = SmartHostsManager.loadFromLines(lines)
+        assertEquals(1, count) // Only chatgpt.com loaded
+
+        assertNull(SmartHostsManager.resolve("4pda.to"))
+        assertNull(SmartHostsManager.resolve("s.4pda.to"))
+        assertNull(SmartHostsManager.resolve("4pda.ru"))
+        assertNotNull(SmartHostsManager.resolve("chatgpt.com"))
+    }
 }

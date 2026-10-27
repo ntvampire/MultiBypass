@@ -318,11 +318,6 @@ object Socks5Dispatcher {
                                 val dataOffset = portOffset + 2
                                 val dataLen = len - dataOffset
 
-                                if (dstPort == 443) {
-                                    // Принудительно отбрасываем QUIC (UDP 443) для моментального отката YouTube/браузеров на TCP
-                                    continue
-                                }
-
                                 if (dstPort == 53 && dataLen >= 12) {
                                     // Перехват DNS-запроса через SmartHosts
                                     val queryData = ByteArray(dataLen)

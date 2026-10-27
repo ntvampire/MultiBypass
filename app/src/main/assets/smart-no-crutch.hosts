@@ -1,4 +1,4 @@
-# Loopback
+﻿# Loopback
 127.0.0.1 localhost
 ::1 localhost ip6-localhost ip6-loopback
 ff02::1 ip6-allnodes
@@ -8,7 +8,6 @@ ff02::2 ip6-allrouters
 143.20.64.192 37signals.com www.37signals.com
 31.25.239.132 37signals.com
 5.175.161.3 www.37signals.com
-181.215.40.49 4pda.to
 31.25.239.132 www.aave.com
 37.221.93.128 aave.com www.aave.com
 5.175.161.40 aave.com

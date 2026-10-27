@@ -60,7 +60,12 @@ fun AntiDpiGroupScreen(
     var newDomainInput by remember { mutableStateOf("") }
     var showStrategyDialog by remember { mutableStateOf(false) }
 
-    val presetStrategies = remember { PresetStrategies.loadStrategies(context) }
+    var presetStrategies by remember { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(showStrategyDialog) {
+        if (showStrategyDialog) {
+            presetStrategies = PresetStrategies.loadStrategies(context)
+        }
+    }
 
     Scaffold(
         topBar = {

@@ -39,8 +39,9 @@ data class InstalledAppItem(
 fun AppPickerBottomSheet(
     title: String,
     selectedPackages: List<String>,
+    isRouteAll: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (List<String>) -> Unit
+    onSave: (List<String>, Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val pm = context.packageManager
@@ -73,6 +74,10 @@ fun AppPickerBottomSheet(
                         .thenBy { it.name.lowercase() }
                 )
             appList = installed
+            if (isRouteAll) {
+                currentSelected.clear()
+                currentSelected.addAll(installed.map { it.packageName })
+            }
             isLoading = false
         }
     }
@@ -172,13 +177,25 @@ fun AppPickerBottomSheet(
                     Text("+ Медиа / DPI", fontSize = 12.sp, maxLines = 1)
                 }
 
-                if (currentSelected.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = { currentSelected.clear() },
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Снять все", fontSize = 12.sp)
-                    }
+                val areAllSelected = appList.isNotEmpty() && appList.all { currentSelected.contains(it.packageName) }
+
+                OutlinedButton(
+                    onClick = {
+                        if (areAllSelected) {
+                            currentSelected.clear()
+                        } else {
+                            currentSelected.clear()
+                            currentSelected.addAll(appList.map { it.packageName })
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        if (areAllSelected) "Снять все" else "Выбрать все",
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
                 }
             }
 
@@ -210,7 +227,7 @@ fun AppPickerBottomSheet(
                         if (geoblockApps.isNotEmpty()) {
                             item(key = "header_geo") {
                                 SectionHeader(
-                                    title = "🌐 Обход геоблокировок (SmartDNS)",
+                                    title = "🌐 Обход геоблокировок (SmartHosts)",
                                     subtitle = "ChatGPT, Gemini, Claude, Spotify, Canva...",
                                     color = AccentBlue,
                                     allChecked = geoblockApps.all { currentSelected.contains(it.packageName) },
@@ -318,9 +335,12 @@ fun AppPickerBottomSheet(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                val isAllSelectedForSave = appList.isNotEmpty() && appList.all { currentSelected.contains(it.packageName) }
+
                 Button(
                     onClick = {
-                        onSave(currentSelected.toList())
+                        val allSelected = appList.isNotEmpty() && appList.all { currentSelected.contains(it.packageName) }
+                        onSave(currentSelected.toList(), allSelected)
                         onDismiss()
                     },
                     modifier = Modifier
@@ -328,7 +348,10 @@ fun AppPickerBottomSheet(
                         .height(50.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Сохранить (${currentSelected.size} выбрано)")
+                    Text(
+                        if (isAllSelectedForSave) "Сохранить (Все приложения)"
+                        else "Сохранить (${currentSelected.size} выбрано)"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

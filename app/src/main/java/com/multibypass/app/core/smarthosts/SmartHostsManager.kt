@@ -76,6 +76,18 @@ object SmartHostsManager {
     }
 
     /**
+     * Domains explicitly excluded from SmartHosts SNI relay (e.g. 4pda).
+     * These domains break when routed through foreign SNI relays and must be resolved
+     * directly by the native operator/carrier DNS.
+     */
+    fun isExcludedDomain(domain: String): Boolean {
+        val d = domain.trim().trimEnd('.').lowercase()
+        return d == "4pda.to" || d.endsWith(".4pda.to") ||
+               d == "4pda.ru" || d.endsWith(".4pda.ru") ||
+               d.contains("4pda")
+    }
+
+    /**
      * Parses lines in standard /etc/hosts format: <IP> <domain1> <domain2> ...
      */
     fun loadFromLines(lines: List<String>): Int {
@@ -96,6 +108,7 @@ object SmartHostsManager {
             for (i in 1 until tokens.size) {
                 val domain = tokens[i].trim().trimEnd('.').lowercase()
                 if (domain.isNotEmpty() && !domain.startsWith("#") && domain != "localhost") {
+                    if (isExcludedDomain(domain)) continue
                     val list = newMap.getOrPut(domain) { mutableListOf() }
                     if (!list.contains(ip)) {
                         list.add(ip)
@@ -118,7 +131,7 @@ object SmartHostsManager {
     fun resolve(domain: String): List<String>? {
         if (hostMap.isEmpty()) return null
         val cleanDomain = domain.trim().trimEnd('.').lowercase()
-        if (cleanDomain.isEmpty()) return null
+        if (cleanDomain.isEmpty() || isExcludedDomain(cleanDomain)) return null
 
         // 1. Exact match
         hostMap[cleanDomain]?.let { return it }
