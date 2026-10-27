@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-MultiBypass Domain Lists, Strategies & DNS Providers Pipeline.
-Fetches, cleans, deduplicates mobile-first domain lists for SmartDNS and Anti-DPI,
+MultiBypass Anti-DPI Domain Lists & TCP Desync Strategies Pipeline.
+Fetches, cleans, deduplicates mobile-first domain lists for Anti-DPI (ByeByeDPI),
 orders TCP desynchronization strategies from simple to complex with default #1,
-and mirrors configurations for GitHub Pages distribution.
+and mirrors configurations for GitHub Pages distribution and app assets.
 
 Runs via GitHub Actions on weekly schedule and publishes to GitHub Pages (docs/).
 """
@@ -24,21 +24,16 @@ SEEDS_DIR = REPO_ROOT / "seeds"
 DOCS_DIR = REPO_ROOT / "docs"
 ASSETS_DIR = REPO_ROOT / "app" / "src" / "main" / "assets"
 
-SEEDS_DNS_FILE = SEEDS_DIR / "seeds_dns.txt"
 SEEDS_ANTIDPI_FILE = SEEDS_DIR / "seeds_antidpi.txt"
 SEEDS_STRATEGIES_FILE = SEEDS_DIR / "seeds_strategies.txt"
 
-OUT_DNS_DOCS = DOCS_DIR / "domains_dns.txt"
 OUT_ANTIDPI_DOCS = DOCS_DIR / "domains_antidpi.txt"
 OUT_STRATEGIES_DOCS = DOCS_DIR / "strategies.txt"
 OUT_VERSION_DOCS = DOCS_DIR / "domains_version.json"
-OUT_PROVIDERS_DOCS = DOCS_DIR / "dns_providers.json"
 
-OUT_DNS_ASSETS = ASSETS_DIR / "domains_dns.txt"
 OUT_ANTIDPI_ASSETS = ASSETS_DIR / "domains_antidpi.txt"
 OUT_STRATEGIES_ASSETS = ASSETS_DIR / "strategies.txt"
 OUT_STRATEGIES_LIST_ASSETS = ASSETS_DIR / "proxytest_strategies.list"
-OUT_PROVIDERS_ASSETS = ASSETS_DIR / "dns_providers.json"
 
 DEFAULT_STRATEGY = "-o1 -r-5+se -a1"
 
@@ -47,10 +42,6 @@ UPSTREAM_ANTIDPI_URLS = [
     # Flowseal community lists for Discord, YouTube, GGC and voice endpoints
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/lists/list-general.txt",
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/lists/list-google.txt",
-]
-
-UPSTREAM_DNS_URLS = [
-    # Upstream SmartDNS lists can be appended here
 ]
 
 # Hard-exclusion blacklist (no desktop ballast, no torrents, no casinos)
@@ -77,7 +68,7 @@ def fetch_url(url: str, timeout: int = 10) -> str:
     """Fetch text content from a remote URL with error handling."""
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "MultiBypass-Updater/1.0 (+https://github.com/ntvampire/MultiBypass)"}
+        headers={"User-Agent": "MultiBypass-Updater/2.0 (+https://github.com/ntvampire/MultiBypass)"}
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -101,33 +92,33 @@ def clean_domain(raw: str) -> str:
     line = line.split(":")[0]
     line = line.strip(".")
 
-    # Filter out junk, torrents and domestic sites
-    if JUNK_PATTERN.search(line):
-        return ""
-    if DOMESTIC_PATTERN.search(line):
+    if not DOMAIN_VALIDATOR.match(line):
         return ""
 
-    if DOMAIN_VALIDATOR.match(line):
-        return line
-    return ""
+    # Filter out junk and domestic banking/services
+    if JUNK_PATTERN.search(line) or DOMESTIC_PATTERN.search(line):
+        return ""
+
+    return line
 
 
-def load_seeds(filepath: Path) -> list[str]:
-    """Load curated seed domains from a local file."""
-    if not filepath.exists():
-        print(f"[WARN] Seed file {filepath} not found!", file=sys.stderr)
+def load_seeds(file_path: Path) -> list[str]:
+    """Load and sanitize domains from local seed file."""
+    if not file_path.exists():
+        print(f"[WARN] Seed file {file_path} not found!", file=sys.stderr)
         return []
 
-    domains = []
-    with open(filepath, "r", encoding="utf-8") as f:
+    domains = set()
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             cleaned = clean_domain(line)
             if cleaned:
-                domains.append(cleaned)
-    return domains
+                domains.add(cleaned)
+    return sorted(list(domains))
 
 
 def compute_sha256(content: str) -> str:
+    """Compute hex sha256 of text string."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -151,23 +142,6 @@ def process_antidpi_domains() -> list[str]:
 
     result = sorted(list(domains))
     return result[:250]
-
-
-def process_dns_domains() -> list[str]:
-    """Process and deduplicate DNS Geo-unblock domains (Gemini, ChatGPT, Claude, Spotify, etc.)."""
-    domains = set(load_seeds(SEEDS_DNS_FILE))
-    print(f"Loaded {len(domains)} base DNS seed domains (including full Gemini mobile stack).")
-
-    for url in UPSTREAM_DNS_URLS:
-        print(f"Fetching upstream SmartDNS: {url}")
-        content = fetch_url(url)
-        for line in content.splitlines():
-            cleaned = clean_domain(line)
-            if cleaned:
-                domains.add(cleaned)
-
-    result = sorted(list(domains))
-    return result[:200]
 
 
 def process_strategies() -> list[str]:
@@ -197,27 +171,20 @@ def process_strategies() -> list[str]:
 
 
 def main():
-    print("=== MultiBypass Lists, Strategies & Providers Pipeline ===")
+    print("=== MultiBypass Lists & Strategies Pipeline ===")
 
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     # 1. Process domain lists and strategies
     antidpi_list = process_antidpi_domains()
-    dns_list = process_dns_domains()
     strategies_list = process_strategies()
 
-    if not antidpi_list or not dns_list or not strategies_list:
+    if not antidpi_list or not strategies_list:
         print("[ERROR] One of the lists is empty! Aborting update to protect database.", file=sys.stderr)
         sys.exit(1)
 
     # 2. Format outputs with header comments
-    dns_text = (
-        "# MultiBypass - Свой DNS (SmartDNS / Geo-unblock)\n"
-        "# Полный стек Google Gemini & Assistant, ChatGPT, Claude, Spotify, PSN, Xbox\n"
-        + "\n".join(dns_list) + "\n"
-    )
-
     antidpi_text = (
         "# MultiBypass - Десинхронизация TCP (ByeByeDPI)\n"
         "# Мобильные узлы YouTube CDN, Discord Voice/Gateway, Meta, X, Signal\n"
@@ -230,7 +197,6 @@ def main():
         + "\n".join(strategies_list) + "\n"
     )
 
-    dns_hash = compute_sha256(dns_text)
     antidpi_hash = compute_sha256(antidpi_text)
     strategies_hash = compute_sha256(strategies_text)
 
@@ -250,11 +216,6 @@ def main():
     version_metadata = {
         "version": new_version,
         "updated_at": now_iso,
-        "dns": {
-            "count": len(dns_list),
-            "sha256": dns_hash,
-            "filename": "domains_dns.txt"
-        },
         "antidpi": {
             "count": len(antidpi_list),
             "sha256": antidpi_hash,
@@ -264,16 +225,10 @@ def main():
             "count": len(strategies_list),
             "sha256": strategies_hash,
             "filename": "strategies.txt"
-        },
-        "providers": {
-            "filename": "dns_providers.json"
         }
     }
 
     # 4. Write files to docs/ (GitHub Pages distribution)
-    with open(OUT_DNS_DOCS, "w", encoding="utf-8", newline="\n") as f:
-        f.write(dns_text)
-
     with open(OUT_ANTIDPI_DOCS, "w", encoding="utf-8", newline="\n") as f:
         f.write(antidpi_text)
 
@@ -285,9 +240,6 @@ def main():
         f.write("\n")
 
     # 5. Mirror to app assets as embedded offline fallback
-    with open(OUT_DNS_ASSETS, "w", encoding="utf-8", newline="\n") as f:
-        f.write(dns_text)
-
     with open(OUT_ANTIDPI_ASSETS, "w", encoding="utf-8", newline="\n") as f:
         f.write(antidpi_text)
 
@@ -297,15 +249,7 @@ def main():
     with open(OUT_STRATEGIES_LIST_ASSETS, "w", encoding="utf-8", newline="\n") as f:
         f.write(strategies_text)
 
-    # 6. Mirror dns_providers.json to assets if in docs
-    if OUT_PROVIDERS_DOCS.exists():
-        with open(OUT_PROVIDERS_DOCS, "r", encoding="utf-8") as f:
-            providers_data = f.read()
-        with open(OUT_PROVIDERS_ASSETS, "w", encoding="utf-8", newline="\n") as f:
-            f.write(providers_data)
-
     print(f"[SUCCESS] Updated:")
-    print(f"  - DNS: {len(dns_list)} domains (SHA256: {dns_hash[:10]}...)")
     print(f"  - AntiDPI: {len(antidpi_list)} domains (SHA256: {antidpi_hash[:10]}...)")
     print(f"  - Strategies: {len(strategies_list)} presets (Default #1: {DEFAULT_STRATEGY})")
     print(f"  - Version: {new_version} ({now_iso})")

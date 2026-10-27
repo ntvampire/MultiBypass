@@ -1,37 +1,36 @@
-# MultiBypass - Базовые стратегии десинхронизации TCP (ByeByeDPI)
-# Отсортированы от простых (базовые сплиты/дисордер) к сложным (многоступенчатые фильтры).
-# Стратегия по умолчанию (#1) зафиксирована на позиции 1.
+# MultiBypass - Пресеты десинхронизации TCP (ByeByeDPI)
+# Отсортированы от простых к сложным. Стратегия по умолчанию (#1) зафиксирована на позиции 1.
 
-# === 1. Базовая стратегия по умолчанию (Default) ===
+# === 1. Базовые и простые стратегии (Split, Disorder, OOB) ===
 -o1 -r-5+se -a1
-
-# === 2. Простые стратегии (Single split / disorder / OOB) ===
 -d1 -s3+s -a1
--o3 -d7 -a1
+-s1 -d3+s -a1 -At -r1+s -a1
 -d7 -s2 -a1
+-o3 -d7 -a1
 -o1 -s4 -s6 -a1
 -o1+s -d3+s -a1
+-r1+s -a1
+-r-5+se -a1
+
+# === 2. Фейковые пакеты и TTL (Fake, Bad Seq, Drop) ===
 -f -1 -e 1 -q 1
 -q1 -r25+s -a1
+-f-1 -t8 -s1+s -a1
 -f-1+sm -t7 -m2 -a1
 -s5+s -s35+s -m4 -a1
 -d6+s -q4+hm -o2 -a1
-
-# === 3. TLS-record манипуляции (-r, --tlsrec) и авто-подстройки ===
--r1+s -a1
--r-5+se -a1
---tlsrec 1+s --auto=torst -a1
--s1 -d3+s -a1 -At -r1+s -a1
 -o1 -f-1 -r-5+se -a1
 -d1 -s1+s -r1+s -f-1 -t8 -a1
 -r8 -o2 -s7 -q4+s -a1
 -d1+s -o2 -s5 -r5 -a1
 -o1 -a1 -At,r,s -d1 -a1
 -d1 -s1+s -r1+s -e1 -m1 -o1+s -f-1 -t2 -a1
-
-# === 4. Фейковые пакеты, SNI и модификация TTL (-n {sni}, --fake) ===
--f-1 -t8 -s1+s -a1
 --fake -1 --ttl 8 --split 1+s --disorder 3+s -a1
+
+# === 3. Деление TLS-записи и подмена SNI (TLS-Record, Fake SNI) ===
+--tlsrec 1+s --auto=torst -a1
+--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c
+--disorder 1 --split 2 --fake-sni google.com
 -f64+se -n {sni} -t5 -a1
 -n {sni} -Qr -d1 -f-1 -a1
 -f-1 -t8 -n {sni} -s1+s -a1
@@ -39,16 +38,16 @@
 -n {sni} -Qr -f-1 -r1+s -a1
 -o1 -a1 -An -f1+nme -t6 -a1
 -n {sni} -Qr -m2 -f-1 -d7 -a1
--q1+s -s29+s -o5+s -f-1 -S -a1
--o1 -d1 -r1+s -S -s1+s -d3+s -a1
 -s4+sn -r9+s -Qr -n {sni} -S -a1
--q1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1
--o1 -a1 -Ar -q1 -a1 -At -f-1 -r1+s -a1
 -n {sni} -Qr -d5+sm -f3+sm -o2 -t4 -a1
 -f-1 -n {sni} -Qr -s2+s -r3 -o20 -t4 -a1
 -n {sni} -Qr -f6+nr -d2 -d11 -f9+hm -o3 -t7 -a1
 
-# === 5. Комплексные многоступенчатые фильтры (Multi-stage / Heavy) ===
+# === 4. Комплексные многоступенчатые цепочки десинхронизации ===
+-q1+s -s29+s -o5+s -f-1 -S -a1
+-o1 -d1 -r1+s -S -s1+s -d3+s -a1
+-q1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1
+-o1 -a1 -Ar -q1 -a1 -At -f-1 -r1+s -a1
 -d1 -s4 -d8 -s1+s -d5+s -s10+s -d20+s -a1
 -d1 -o1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1
 -q1+s -s29+s -s30+s -s14+s -o5+s -f-1 -S -a1
