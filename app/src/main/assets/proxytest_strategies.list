@@ -1,7 +1,5 @@
 # MultiBypass - Пресеты десинхронизации TCP (ByeByeDPI)
 # Отсортированы от простых к сложным. Стратегия по умолчанию (#1) зафиксирована на позиции 1.
-
-# === 1. Базовые и простые стратегии (Split, Disorder, OOB) ===
 -o1 -r-5+se -a1
 -d1 -s3+s -a1
 -s1 -d3+s -a1 -At -r1+s -a1
@@ -11,8 +9,6 @@
 -o1+s -d3+s -a1
 -r1+s -a1
 -r-5+se -a1
-
-# === 2. Фейковые пакеты и TTL (Fake, Bad Seq, Drop) ===
 -f -1 -e 1 -q 1
 -q1 -r25+s -a1
 -f-1 -t8 -s1+s -a1
@@ -26,8 +22,6 @@
 -o1 -a1 -At,r,s -d1 -a1
 -d1 -s1+s -r1+s -e1 -m1 -o1+s -f-1 -t2 -a1
 --fake -1 --ttl 8 --split 1+s --disorder 3+s -a1
-
-# === 3. Деление TLS-записи и подмена SNI (TLS-Record, Fake SNI) ===
 --tlsrec 1+s --auto=torst -a1
 --tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c
 --disorder 1 --split 2 --fake-sni google.com
@@ -42,8 +36,6 @@
 -n {sni} -Qr -d5+sm -f3+sm -o2 -t4 -a1
 -f-1 -n {sni} -Qr -s2+s -r3 -o20 -t4 -a1
 -n {sni} -Qr -f6+nr -d2 -d11 -f9+hm -o3 -t7 -a1
-
-# === 4. Комплексные многоступенчатые цепочки десинхронизации ===
 -q1+s -s29+s -o5+s -f-1 -S -a1
 -o1 -d1 -r1+s -S -s1+s -d3+s -a1
 -q1 -a1 -Ar -o1 -a1 -At -f-1 -r1+s -a1

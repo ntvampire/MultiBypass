@@ -1,22 +1,14 @@
 {
-  "version": 9,
-  "updated_at": "2026-10-21T09:38:15Z",
-  "dns": {
-    "count": 50,
-    "sha256": "e445b617f8d7cefe248c14dc62e58e7d9fa71c79d2503d7353e34ca0d086806f",
-    "filename": "domains_dns.txt"
-  },
+  "version": 10,
+  "updated_at": "2026-10-28T10:46:48Z",
   "antidpi": {
     "count": 66,
     "sha256": "dedbd65f9e84811fa8b9594097ea51693a54b89054e343ec40c522cbd6d56c27",
     "filename": "domains_antidpi.txt"
   },
   "strategies": {
-    "count": 64,
-    "sha256": "98af0b4867514d67d0c261c5252fcfd92e7d0e5bd8550299467150f5f27d62ff",
+    "count": 66,
+    "sha256": "aff4eaa8ef30707c5ea73340e74844eeda32545d35175ade642d8b493375986e",
     "filename": "strategies.txt"
-  },
-  "providers": {
-    "filename": "dns_providers.json"
   }
 }
