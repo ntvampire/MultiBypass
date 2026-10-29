@@ -3,6 +3,7 @@ package com.multibypass.app.core.vpn
 import android.content.Context
 import android.util.Log
 import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
+import com.multibypass.app.core.tgproxy.TelegramBridgeController
 import com.multibypass.app.core.tgproxy.TelegramDcRanges
 import com.multibypass.app.core.tgproxy.TelegramTransparentBridge
 import com.multibypass.app.data.repository.SettingsRepository
@@ -16,13 +17,14 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketAddress
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Локальный SOCKS5-диспетчер трафика:
  * Принимает входящие соединения от hev-socks5-tunnel и выполняет прозрачную маршрутизацию:
  * - Прямые TCP-соединения к серверам Telegram (AS44907, AS62041) перехватываются и
- *   направляются в прозрачный sTGWS-мост (через локальный WebSocket к Cloudflare).
+ *   направляются в прозрачный sTGWS-мост (прямой скоростной путь либо WebSocket к Cloudflare).
  * - Весь остальной TCP-трафик (сайты, сервисы) передаётся в ByeByeDPI (порт 1080) для обхода DPI.
  * - UDP-трафик (UDP ASSOCIATE):
  *   * DNS-запросы (порт 53) перехватываются SmartHostsDnsRelay (обход геоблока + нативный DNS оператора).
@@ -32,11 +34,24 @@ object Socks5Dispatcher {
 
     private const val TAG = "Socks5Dispatcher"
     const val DEFAULT_PORT = 10800
+    private const val SOCKET_TIMEOUT_MS = 30000
 
     private val isRunning = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Реестр открытых клиентских и нисходящих сокетов для мгновенного сброса при смене сети (Wi-Fi <-> LTE)
+    private val activeSockets = java.util.Collections.newSetFromMap(ConcurrentHashMap<Socket, Boolean>())
+
+    fun resetActiveConnections() {
+        val list = activeSockets.toList()
+        Log.i(TAG, "Resetting ${list.size} active connections on network handover")
+        for (s in list) {
+            try { s.close() } catch (_: Exception) {}
+        }
+        activeSockets.clear()
+    }
 
     @Synchronized
     fun start(context: Context, listenPort: Int = DEFAULT_PORT, downstreamPort: Int = 1080) {
@@ -59,8 +74,15 @@ object Socks5Dispatcher {
                     try {
                         val client = server.accept()
                         client.tcpNoDelay = true
+                        client.soTimeout = SOCKET_TIMEOUT_MS
+                        activeSockets.add(client)
                         launch {
-                            handleClient(context, client, downstreamPort)
+                            try {
+                                handleClient(context, client, downstreamPort)
+                            } finally {
+                                activeSockets.remove(client)
+                                try { client.close() } catch (_: Exception) {}
+                            }
                         }
                     } catch (e: Exception) {
                         if (!isRunning.get()) break
@@ -83,6 +105,7 @@ object Socks5Dispatcher {
             serverJob = null
             serverSocket?.close()
             serverSocket = null
+            resetActiveConnections()
             Log.i(TAG, "Socks5Dispatcher stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping Socks5Dispatcher", e)
@@ -100,15 +123,21 @@ object Socks5Dispatcher {
                 client.close()
                 return@withContext
             }
-            val nMethods = cIn.read()
-            val methods = ByteArray(nMethods)
+
+            val nmethods = cIn.read()
+            if (nmethods <= 0) {
+                client.close()
+                return@withContext
+            }
+
+            val methods = ByteArray(nmethods)
             readFully(cIn, methods)
 
-            // Отвечаем: Версия 5, без аутентификации (0x00)
+            // Отвечаем: 0x05 (SOCKS5), 0x00 (NO AUTHENTICATION REQUIRED)
             cOut.write(byteArrayOf(0x05, 0x00))
             cOut.flush()
 
-            // 2. Читаем запрос команды: VER(1), CMD(1), RSV(1), ATYP(1)
+            // 2. Обработка запроса клиента (COMMAND REQUEST)
             val reqVer = cIn.read()
             val reqCmd = cIn.read()
             val reqRsv = cIn.read()
@@ -119,7 +148,8 @@ object Socks5Dispatcher {
                 return@withContext
             }
 
-            if (reqCmd == 0x03) { // UDP ASSOCIATE
+            // Обработка UDP ASSOCIATE (0x03)
+            if (reqCmd == 0x03) {
                 relayUdpAssociate(context, client, atyp, cIn, cOut, downstreamPort)
                 return@withContext
             }
@@ -130,23 +160,22 @@ object Socks5Dispatcher {
                 return@withContext
             }
 
-            // Извлекаем адрес назначения
-            var targetIp = ""
+            // Считываем адрес назначения
+            val targetIp: String
             val rawAddrBytes: ByteArray
-
             when (atyp) {
-                0x01 -> { // IPv4
+                0x01 -> { // IPv4 (4 байта)
                     val ip4Bytes = ByteArray(4)
                     readFully(cIn, ip4Bytes)
                     rawAddrBytes = ip4Bytes
-                    targetIp = "${ip4Bytes[0].toInt() and 0xFF}.${ip4Bytes[1].toInt() and 0xFF}.${ip4Bytes[2].toInt() and 0xFF}.${ip4Bytes[3].toInt() and 0xFF}"
+                    targetIp = "${ip4Bytes[0].toUByte()}.${ip4Bytes[1].toUByte()}.${ip4Bytes[2].toUByte()}.${ip4Bytes[3].toUByte()}"
                 }
-                0x03 -> { // Domain name
-                    val len = cIn.read()
-                    val domainBytes = ByteArray(len)
+                0x03 -> { // Domain name (1 байт длина + имя)
+                    val domainLen = cIn.read()
+                    val domainBytes = ByteArray(domainLen)
                     readFully(cIn, domainBytes)
-                    rawAddrBytes = byteArrayOf(len.toByte()) + domainBytes
-                    targetIp = String(domainBytes)
+                    rawAddrBytes = byteArrayOf(domainLen.toByte()) + domainBytes
+                    targetIp = String(domainBytes, Charsets.US_ASCII)
                 }
                 0x04 -> { // IPv6
                     val ip6Bytes = ByteArray(16)
@@ -173,12 +202,12 @@ object Socks5Dispatcher {
 
             if (isTransparentTgActive && isTgTarget) {
                 // Прямой запрос к дата-центрам Telegram -> подтверждаем CONNECT и передаём в sTGWS мост
-                sendSocksReply(cOut, rep = 0x00, bndPort = 1443)
+                sendSocksReply(cOut, rep = 0x00, bndPort = targetPort)
                 TelegramTransparentBridge.handleConnection(
                     clientSocket = client,
                     targetIp = targetIp,
                     targetPort = targetPort,
-                    localProxyPort = 1443,
+                    localProxyPort = TelegramBridgeController.LOCAL_PROXY_PORT,
                     secret = tgConfig.secret,
                     fallbackDownstreamPort = downstreamPort
                 )
@@ -200,155 +229,139 @@ object Socks5Dispatcher {
         cOut: OutputStream,
         downstreamPort: Int
     ) {
+        var localUdpSocket: DatagramSocket? = null
         try {
-            val downstream = Socket("127.0.0.1", downstreamPort)
-            downstream.tcpNoDelay = true
-            val dIn = downstream.getInputStream()
-            val dOut = downstream.getOutputStream()
-
-            // Рукопожатие с downstream
-            dOut.write(byteArrayOf(0x05, 0x01, 0x00))
-            dOut.flush()
-            val greetingResp = ByteArray(2)
-            readFully(dIn, greetingResp)
-
-            // Читаем параметры UDP ASSOCIATE от клиента
-            val addrBytes: ByteArray = when (atyp) {
-                0x01 -> ByteArray(4).also { readFully(cIn, it) }
+            // Считываем заявленный клиентом адрес и порт
+            when (atyp) {
+                0x01 -> {
+                    val ip4 = ByteArray(4)
+                    readFully(cIn, ip4)
+                }
                 0x03 -> {
                     val len = cIn.read()
-                    val b = ByteArray(len)
-                    readFully(cIn, b)
-                    byteArrayOf(len.toByte()) + b
+                    val dom = ByteArray(len)
+                    readFully(cIn, dom)
                 }
-                0x04 -> ByteArray(16).also { readFully(cIn, it) }
-                else -> ByteArray(0)
-            }
-            val p1 = cIn.read().toByte()
-            val p2 = cIn.read().toByte()
-
-            // Отправляем UDP ASSOCIATE в downstream
-            val req = byteArrayOf(0x05, 0x03, 0x00, atyp.toByte()) + addrBytes + byteArrayOf(p1, p2)
-            dOut.write(req)
-            dOut.flush()
-
-            // Читаем ответ downstream
-            val respVer = dIn.read()
-            val respRep = dIn.read()
-            val respRsv = dIn.read()
-            val respAtyp = dIn.read()
-
-            when (respAtyp) {
-                0x01 -> ByteArray(4).also { readFully(dIn, it) }
-                0x03 -> {
-                    val len = dIn.read()
-                    ByteArray(len).also { readFully(dIn, it) }
+                0x04 -> {
+                    val ip6 = ByteArray(16)
+                    readFully(cIn, ip6)
                 }
-                0x04 -> ByteArray(16).also { readFully(dIn, it) }
-                else -> ByteArray(4)
             }
-            val bp1 = dIn.read().toByte()
-            val bp2 = dIn.read().toByte()
-            val downstreamUdpPort = ((bp1.toInt() and 0xFF) shl 8) or (bp2.toInt() and 0xFF)
+            cIn.read() // p1
+            cIn.read() // p2
 
-            // Создаем собственный UDP-релей для локального перехвата DNS
-            val relaySocket = DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
-            MultiBypassVpnService.protectSocket(relaySocket)
-            val myPort = relaySocket.localPort
+            // Открываем локальный UDP сокет для приёма инкапсулированных пакетов
+            localUdpSocket = DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
+            val boundPort = localUdpSocket.localPort
 
-            // Отвечаем клиенту (hev-socks5-tunnel) адресом нашего релея
-            val resp = byteArrayOf(
-                0x05.toByte(), 0x00.toByte(), 0x00.toByte(), 0x01.toByte(),
-                127.toByte(), 0.toByte(), 0.toByte(), 1.toByte(),
-                ((myPort shr 8) and 0xFF).toByte(),
-                (myPort and 0xFF).toByte()
-            )
-            cOut.write(resp)
-            cOut.flush()
+            // Отправляем SUCCESS ответ c локальным UDP портом
+            sendSocksReply(cOut, rep = 0x00, bndPort = boundPort)
 
-            val running = AtomicBoolean(true)
+            // Запускаем ретранслятор UDP-пакетов
+            val udpRelayThread = Thread {
+                val recvBuf = ByteArray(65535)
+                var clientUdpAddr: SocketAddress? = null
 
-            // Контрольный поток TCP
-            Thread {
                 try {
-                    while (cIn.read() != -1) {}
-                } catch (_: Exception) {} finally {
-                    running.set(false)
-                    try { client.close() } catch (_: Exception) {}
-                    try { downstream.close() } catch (_: Exception) {}
-                    try { relaySocket.close() } catch (_: Exception) {}
-                }
-            }.start()
+                    while (isRunning.get() && !localUdpSocket.isClosed) {
+                        val packet = DatagramPacket(recvBuf, recvBuf.size)
+                        localUdpSocket.receive(packet)
 
-            // Поток прокачки и перехвата UDP
-            Thread {
-                val buf = ByteArray(65535)
-                var clientEndpoint: SocketAddress? = null
-                val downstreamEndpoint = InetSocketAddress("127.0.0.1", downstreamUdpPort)
-
-                while (running.get() && !relaySocket.isClosed) {
-                    try {
-                        val packet = DatagramPacket(buf, buf.size)
-                        relaySocket.receive(packet)
-                        val len = packet.length
-                        if (len < 10) continue
-
-                        if (packet.port == downstreamUdpPort) {
-                            // Ответ от downstream (ByeByeDPI) -> пересылаем клиенту
-                            val targetClient = clientEndpoint
-                            if (targetClient != null) {
-                                val p = DatagramPacket(buf, len, targetClient)
-                                relaySocket.send(p)
-                            }
-                        } else {
-                            // Пакет от клиента (hev-socks5-tunnel)
-                            clientEndpoint = packet.socketAddress
-
-                            // Парсим SOCKS5 UDP заголовок: [RSV 2] [FRAG 1] [ATYP 1] [DST.ADDR var] [DST.PORT 2] [DATA var]
-                            val atypVal = buf[3].toInt() and 0xFF
-                            val addrLen = when (atypVal) {
-                                0x01 -> 4
-                                0x03 -> (buf[4].toInt() and 0xFF) + 1
-                                0x04 -> 16
-                                else -> 0
-                            }
-                            val portOffset = 4 + addrLen
-                            if (portOffset + 2 <= len) {
-                                val dstPort = ((buf[portOffset].toInt() and 0xFF) shl 8) or (buf[portOffset + 1].toInt() and 0xFF)
-                                val dataOffset = portOffset + 2
-                                val dataLen = len - dataOffset
-
-                                if (dstPort == 53 && dataLen >= 12) {
-                                    // Перехват DNS-запроса через SmartHosts
-                                    val queryData = ByteArray(dataLen)
-                                    System.arraycopy(buf, dataOffset, queryData, 0, dataLen)
-
-                                    val dnsResp = SmartHostsDnsRelay.handleDnsQuery(context, queryData, dataLen)
-                                    if (dnsResp != null) {
-                                        val respBuf = ByteArray(dataOffset + dnsResp.size)
-                                        System.arraycopy(buf, 0, respBuf, 0, dataOffset)
-                                        System.arraycopy(dnsResp, 0, respBuf, dataOffset, dnsResp.size)
-
-                                        val sendPacket = DatagramPacket(respBuf, respBuf.size, packet.socketAddress)
-                                        relaySocket.send(sendPacket)
-                                        continue
-                                    }
-                                }
-                            }
-
-                            // Не DNS или не перехваченный UDP -> пересылаем в ByeByeDPI
-                            val p = DatagramPacket(buf, len, downstreamEndpoint)
-                            relaySocket.send(p)
+                        if (clientUdpAddr == null) {
+                            clientUdpAddr = packet.socketAddress
                         }
-                    } catch (e: Exception) {
-                        if (!running.get() || relaySocket.isClosed) break
+
+                        val data = packet.data
+                        val len = packet.length
+
+                        // Разбираем заголовок SOCKS5 UDP Request
+                        // RSV (2B), FRAG (1B), ATYP (1B), DST.ADDR, DST.PORT (2B)
+                        if (len < 10 || data[2] != 0x00.toByte()) {
+                            continue
+                        }
+
+                        val uAtyp = data[3].toInt() and 0xFF
+                        var headerOffset = 4
+                        val destIp: String
+
+                        when (uAtyp) {
+                            0x01 -> { // IPv4
+                                destIp = "${data[headerOffset].toUByte()}.${data[headerOffset+1].toUByte()}.${data[headerOffset+2].toUByte()}.${data[headerOffset+3].toUByte()}"
+                                headerOffset += 4
+                            }
+                            0x03 -> { // Domain
+                                val domLen = data[headerOffset].toInt() and 0xFF
+                                headerOffset += 1
+                                destIp = String(data, headerOffset, domLen, Charsets.US_ASCII)
+                                headerOffset += domLen
+                            }
+                            0x04 -> { // IPv6
+                                destIp = "ipv6"
+                                headerOffset += 16
+                            }
+                            else -> continue
+                        }
+
+                        val uPort = ((data[headerOffset].toInt() and 0xFF) shl 8) or (data[headerOffset + 1].toInt() and 0xFF)
+                        headerOffset += 2
+
+                        val payload = data.copyOfRange(headerOffset, len)
+
+                        // 1. DNS-запросы (UDP 53): перехватываем SmartHosts
+                        if (uPort == 53) {
+                            val dnsResponse = SmartHostsDnsRelay.handleDnsQuery(context, payload, payload.size)
+                            if (dnsResponse != null && clientUdpAddr != null) {
+                                val replyHeader = data.copyOfRange(0, headerOffset)
+                                val fullReply = replyHeader + dnsResponse
+                                val respPacket = DatagramPacket(fullReply, fullReply.size, clientUdpAddr)
+                                localUdpSocket.send(respPacket)
+                            }
+                            continue
+                        }
+
+                        // 2. Обычный UDP-трафик (QUIC / DNS оператора): передаем без блокировок
+                        try {
+                            val directUdp = DatagramSocket()
+                            MultiBypassVpnService.protectSocket(directUdp)
+                            directUdp.soTimeout = 4000
+                            val targetAddress = InetAddress.getByName(destIp)
+                            val outPacket = DatagramPacket(payload, payload.size, targetAddress, uPort)
+                            directUdp.send(outPacket)
+
+                            val directRecv = ByteArray(65535)
+                            val inPacket = DatagramPacket(directRecv, directRecv.size)
+                            directUdp.receive(inPacket)
+
+                            if (clientUdpAddr != null) {
+                                val replyHeader = data.copyOfRange(0, headerOffset)
+                                val responsePayload = inPacket.data.copyOfRange(0, inPacket.length)
+                                val fullReply = replyHeader + responsePayload
+                                val clientReply = DatagramPacket(fullReply, fullReply.size, clientUdpAddr)
+                                localUdpSocket.send(clientReply)
+                            }
+                            directUdp.close()
+                        } catch (_: Exception) {}
                     }
+                } catch (_: Exception) {
+                } finally {
+                    try { localUdpSocket.close() } catch (_: Exception) {}
                 }
-            }.start()
+            }
+            udpRelayThread.isDaemon = true
+            udpRelayThread.start()
+
+            // Удерживаем TCP-соединение, пока клиент не закроет сокет
+            val dummy = ByteArray(128)
+            while (isRunning.get()) {
+                val n = cIn.read(dummy)
+                if (n < 0) break
+            }
+            localUdpSocket.close()
 
         } catch (e: Exception) {
-            Log.w(TAG, "UDP ASSOCIATE relay error", e)
+            Log.w(TAG, "UDP ASSOCIATE relay error: ${e.message}")
             try { client.close() } catch (_: Exception) {}
+            try { localUdpSocket?.close() } catch (_: Exception) {}
         }
     }
 
@@ -362,9 +375,13 @@ object Socks5Dispatcher {
     ) {
         var downstream: Socket? = null
         try {
-            val dSocket = Socket("127.0.0.1", downstreamPort)
+            val dSocket = Socket()
             dSocket.tcpNoDelay = true
+            dSocket.soTimeout = SOCKET_TIMEOUT_MS
+            client.soTimeout = SOCKET_TIMEOUT_MS
+            dSocket.connect(InetSocketAddress("127.0.0.1", downstreamPort), 3000)
             downstream = dSocket
+            activeSockets.add(dSocket)
 
             val dIn = dSocket.getInputStream()
             val dOut = dSocket.getOutputStream()
@@ -423,6 +440,7 @@ object Socks5Dispatcher {
         } finally {
             try { client.close() } catch (_: Exception) {}
             try { downstream?.close() } catch (_: Exception) {}
+            downstream?.let { activeSockets.remove(it) }
         }
     }
 

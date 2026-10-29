@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.core.tgproxy.TelegramBridgeController
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -42,7 +42,7 @@ fun MainScreen(
     val repository = remember { SettingsRepository.getInstance(context) }
 
     val vpnStatus by MultiBypassVpnService.vpnStatus.collectAsState()
-    val isTgProxyRunning by TelegramProxyService.isRunning.collectAsState()
+    val isTgProxyRunning by TelegramBridgeController.isRunning.collectAsState()
 
     val smartHostsConfig by repository.smartHostsConfig.collectAsState()
     val smartHostsCount by SmartHostsManager.domainCount.collectAsState()
@@ -297,10 +297,10 @@ fun MainScreen(
                                 repository.updateTgConfig(tgConfig.copy(enabled = isChecked))
                                 if (isChecked) {
                                     if (isConnected) {
-                                        TelegramProxyService.start(context)
+                                        TelegramBridgeController.start(context, tgConfig.secret)
                                     }
                                 } else {
-                                    TelegramProxyService.stop(context)
+                                    TelegramBridgeController.stop()
                                 }
                             }
                         )

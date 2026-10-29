@@ -18,7 +18,7 @@ import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.core.tgproxy.TelegramBridgeController
 import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -158,7 +158,7 @@ class MultiBypassVpnService : VpnService() {
 
                 // 2. Start Telegram sTGWS tunnel if enabled
                 if (tgConfig.enabled) {
-                    TelegramProxyService.start(applicationContext)
+                    TelegramBridgeController.start(applicationContext, tgConfig.secret)
                 }
 
                 val routeAll = repository.routeAllApps.value
@@ -294,7 +294,7 @@ class MultiBypassVpnService : VpnService() {
 
                 val repository = SettingsRepository.getInstance(applicationContext)
                 if (repository.tgConfig.value.enabled) {
-                    TelegramProxyService.stop(applicationContext)
+                    TelegramBridgeController.stop()
                 }
 
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -331,6 +331,20 @@ class MultiBypassVpnService : VpnService() {
         }
     }
 
+    private fun handleUnderlyingNetworkMigration(network: Network) {
+        serviceScope.launch {
+            try {
+                Log.i(TAG, "Migrating VPN components to new active network: $network")
+                com.multibypass.app.core.smarthosts.SmartHostsDnsRelay.refreshUpstreamDns(applicationContext)
+                com.multibypass.app.core.tgproxy.TelegramTransparentBridge.clearCache()
+                com.multibypass.app.core.vpn.Socks5Dispatcher.resetActiveConnections()
+                com.multibypass.app.core.watchdog.ServiceWatchdog.triggerCheck(500)
+            } catch (e: Exception) {
+                Log.w(TAG, "Error during network handover migration: ${e.message}")
+            }
+        }
+    }
+
     private fun registerNetworkTracking() {
         try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
@@ -343,6 +357,7 @@ class MultiBypassVpnService : VpnService() {
                 override fun onAvailable(network: Network) {
                     Log.i(TAG, "Active underlying network changed to: $network")
                     setUnderlyingNetworks(arrayOf(network))
+                    handleUnderlyingNetworkMigration(network)
                 }
 
                 override fun onLost(network: Network) {
@@ -350,6 +365,7 @@ class MultiBypassVpnService : VpnService() {
                     val active = cm.activeNetwork
                     if (active != null) {
                         setUnderlyingNetworks(arrayOf(active))
+                        handleUnderlyingNetworkMigration(active)
                     } else {
                         setUnderlyingNetworks(null)
                     }
@@ -358,6 +374,7 @@ class MultiBypassVpnService : VpnService() {
                 override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
                     if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
                         setUnderlyingNetworks(arrayOf(network))
+                        handleUnderlyingNetworkMigration(network)
                     }
                 }
             }

@@ -11,3 +11,4 @@ build/
 *.aab
 temp_dl/
 scratch/
+.vscode/

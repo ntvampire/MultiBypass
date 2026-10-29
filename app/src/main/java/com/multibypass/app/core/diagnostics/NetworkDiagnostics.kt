@@ -5,7 +5,7 @@ import android.os.Build
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.core.tgproxy.TelegramBridgeController
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -122,33 +122,34 @@ object NetworkDiagnostics {
             }
         )
 
-        // 3. Anti-DPI SOCKS5 HTTP Access (YouTube Interface)
+        // 3. Anti-DPI SOCKS5 HTTP Access (YouTube)
         if (byeDpiListening) {
             val testHttpStart = System.currentTimeMillis()
-            val httpResult = testSocks5Http("127.0.0.1", byeDpiPort, "https://www.youtube.com/generate_204", 4000)
+            val httpResult = testSocks5Http("127.0.0.1", byeDpiPort, "https://www.youtube.com/generate_204", 6000)
             val httpTime = System.currentTimeMillis() - testHttpStart
             steps.add(
                 if (httpResult) {
                     DiagnosticStepResult(
-                        title = "YouTube: Интерфейс и списки",
-                        description = "Успешный отклик через ByeByeDPI SOCKS5",
+                        title = "YouTube (Анти-DPI)",
+                        description = "Серверы YouTube отвечают за $httpTime мс",
                         status = DiagnosticStatus.SUCCESS,
                         latencyMs = httpTime,
-                        detail = "HTTP 204 OK"
+                        detail = "HTTP 204 OK — десинхронизация TCP успешна, видео и интерфейс доступны"
                     )
                 } else {
                     DiagnosticStepResult(
-                        title = "YouTube: Интерфейс и списки",
-                        description = "Не удалось получить отклик через SOCKS5",
+                        title = "YouTube (Анти-DPI)",
+                        description = "Отклик задержан или заблокирован ТСПУ",
                         status = DiagnosticStatus.WARNING,
-                        detail = "Попробуйте изменить параметры десинхронизации"
+                        latencyMs = httpTime,
+                        detail = "Попробуйте изменить стратегию десинхронизации в настройках Анти-DPI"
                     )
                 }
             )
         } else {
             steps.add(
                 DiagnosticStepResult(
-                    title = "YouTube: Интерфейс и списки",
+                    title = "YouTube (Анти-DPI)",
                     description = "VPN не подключен",
                     status = DiagnosticStatus.SKIPPED,
                     detail = "Требуется запустить VPN для проверки десинхронизации"
@@ -220,7 +221,7 @@ object NetworkDiagnostics {
                 )
             )
         } else {
-            val isBridgeListening = isTcpPortOpen("127.0.0.1", 1443, 1000)
+            val isBridgeListening = isTcpPortOpen("127.0.0.1", TelegramBridgeController.LOCAL_PROXY_PORT, 1000)
             val isVpnConnected = (vpnStatus == VpnStatus.CONNECTED)
 
             if (!isVpnConnected) {
@@ -303,73 +304,7 @@ object NetworkDiagnostics {
             )
         }
 
-        // 7. YouTube Video Stream CDN Check
-        if (byeDpiListening) {
-            val streamStart = System.currentTimeMillis()
-            val streamOk = testSocks5Http("127.0.0.1", byeDpiPort, "https://redirector.googlevideo.com/generate_204", 4000)
-            val streamTime = System.currentTimeMillis() - streamStart
-            steps.add(
-                if (streamOk) {
-                    DiagnosticStepResult(
-                        title = "YouTube: Видеопоток (GGC CDN)",
-                        description = "Серверы googlevideo.com доступны ($streamTime мс)",
-                        status = DiagnosticStatus.SUCCESS,
-                        latencyMs = streamTime,
-                        detail = "Воспроизведение видео не блокируется"
-                    )
-                } else {
-                    DiagnosticStepResult(
-                        title = "YouTube: Видеопоток (GGC CDN)",
-                        description = "Видеосерверы googlevideo.com заблокированы ТСПУ",
-                        status = DiagnosticStatus.WARNING,
-                        latencyMs = streamTime,
-                        detail = "Попробуйте другую стратегию десинхронизации"
-                    )
-                }
-            )
-        } else {
-            steps.add(
-                DiagnosticStepResult(
-                    title = "YouTube: Видеопоток (GGC CDN)",
-                    description = "Требуется запуск VPN",
-                    status = DiagnosticStatus.SKIPPED
-                )
-            )
-        }
 
-        // 8. YouTube Thumbnails & Covers Check
-        if (byeDpiListening) {
-            val thumbStart = System.currentTimeMillis()
-            val thumbOk = testSocks5Http("127.0.0.1", byeDpiPort, "https://i.ytimg.com/generate_204", 4000)
-            val thumbTime = System.currentTimeMillis() - thumbStart
-            steps.add(
-                if (thumbOk) {
-                    DiagnosticStepResult(
-                        title = "YouTube: Превью и обложки",
-                        description = "Серверы i.ytimg.com доступны ($thumbTime мс)",
-                        status = DiagnosticStatus.SUCCESS,
-                        latencyMs = thumbTime,
-                        detail = "Обложки видео и аватары загружаются штатно"
-                    )
-                } else {
-                    DiagnosticStepResult(
-                        title = "YouTube: Превью и обложки",
-                        description = "Серверы i.ytimg.com недоступны",
-                        status = DiagnosticStatus.WARNING,
-                        latencyMs = thumbTime,
-                        detail = "Проверьте список доменов Анти-DPI"
-                    )
-                }
-            )
-        } else {
-            steps.add(
-                DiagnosticStepResult(
-                    title = "YouTube: Превью и обложки",
-                    description = "Требуется запуск VPN",
-                    status = DiagnosticStatus.SKIPPED
-                )
-            )
-        }
 
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
         DiagnosticsReport(steps = steps, allOk = allOk)

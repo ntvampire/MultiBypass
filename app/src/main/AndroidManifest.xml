@@ -54,29 +54,9 @@
         </service>
 
         <service
-            android:name=".core.tgproxy.TelegramProxyService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Local Telegram MTProto WebSocket proxy" />
-        </service>
-
-        <service
             android:name=".core.tiles.VpnTileService"
             android:icon="@drawable/ic_stat_vpn"
             android:label="@string/app_name"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".core.tiles.TelegramProxyTileService"
-            android:icon="@drawable/ic_stat_vpn"
-            android:label="Telegram Proxy"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

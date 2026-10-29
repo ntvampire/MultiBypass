@@ -23,6 +23,16 @@ object SmartHostsDnsRelay {
     private const val FALLBACK_DNS_IP = "77.88.8.8" // Yandex DNS fallback
     private const val DNS_TIMEOUT_MS = 2500
 
+    @Volatile
+    private var cachedUpstreamDns: String? = null
+
+    fun refreshUpstreamDns(context: Context) {
+        cachedUpstreamDns = null
+        val newDns = getUpstreamDnsIp(context)
+        cachedUpstreamDns = newDns
+        Log.i(TAG, "Upstream DNS refreshed to: $newDns")
+    }
+
     /**
      * Resolves a DNS query packet.
      * Returns the DNS response ByteArray, or null if resolution failed.
@@ -62,7 +72,7 @@ object SmartHostsDnsRelay {
         queryData: ByteArray,
         queryLength: Int
     ): ByteArray? {
-        val upstreamDns = getUpstreamDnsIp(context)
+        val upstreamDns = cachedUpstreamDns ?: getUpstreamDnsIp(context)
         var socket: DatagramSocket? = null
         return try {
             socket = DatagramSocket()
