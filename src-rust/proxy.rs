@@ -612,9 +612,9 @@ async fn try_cfproxy_base_domain(dc: i32, base_domain: &str) -> (Option<RawWebSo
 
     let (ws, resolved_ip, err) = cf_connect_domain(&domain, "/apiws", 5.0).await;
     if let Some(e) = err {
-        // ВАЖНО (как в Go): cooldown ставим ТОЛЬКО при HTTP 429, иначе
-        // любой reset/timeout выжигал бы домены и плодил лавину cooldown.
-        if is_http_status_error(&e, 429) {
+        // При HTTP 429 (Rate limit) или 503 (Cloudflare Service Unavailable / перегрузка)
+        // временно отставляем домен на cooldown, чтобы не забивать остальные соединения
+        if is_http_status_error(&e, 429) || is_http_status_error(&e, 503) {
             mark_cfproxy_429_cooldown(&base_domain, &e);
         }
         if !resolved_ip.is_empty() {

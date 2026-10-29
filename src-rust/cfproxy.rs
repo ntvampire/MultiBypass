@@ -47,17 +47,30 @@ pub fn normalize_cf_domain(s: &str) -> String {
     while decoded.ends_with('.') {
         decoded.pop();
     }
-    if decoded.is_empty() || !decoded.ends_with(".co.uk") {
+    if decoded.is_empty() || !decoded.contains('.') {
         return String::new();
     }
     decoded
 }
 
 pub fn default_cfproxy_domains() -> Vec<String> {
-    let mut domains = Vec::with_capacity(CFPROXY_ENC.len());
+    let mut domains = Vec::new();
+    for d in &[
+        "yo1nk.app",
+        "cakeisalie.co.uk",
+        "ebally.co.uk",
+        "kartoshka.co.uk",
+        "havegreatday.co.uk",
+        "lovetrue.co.uk",
+        "nebally.co.uk",
+        "notelega.co.uk",
+        "stopblocking.co.uk",
+    ] {
+        domains.push(d.to_string());
+    }
     for enc in CFPROXY_ENC {
         let d = normalize_cf_domain(enc);
-        if !d.is_empty() {
+        if !d.is_empty() && !domains.contains(&d) {
             domains.push(d);
         }
     }

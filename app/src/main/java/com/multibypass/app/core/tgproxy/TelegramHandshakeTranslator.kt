@@ -58,13 +58,28 @@ object TelegramHandshakeTranslator {
         }
 
         val protoTag = t0
-        val dcRaw = ((decryptedHs[60].toInt() and 0xFF) or ((decryptedHs[61].toInt() and 0xFF) shl 8)).toShort()
-        val isMedia = dcRaw < 0
-        var dc = if (isMedia) -dcRaw.toInt() else dcRaw.toInt()
-        // При прямом подключении клиент не указывает DC (он подключается на IP дата-центра).
-        // В таком случае используем DC, определённый по IP-адресу назначения.
-        if (dc <= 0 || dc > 255) {
-            dc = if (guessedDc in 1..255) guessedDc else 2
+
+        // Анализ номера ДЦ и типа соединения (по эталонной логике sTGWS из Zapret Manager):
+        // При прямом подключении клиент шлет в байтах [60..61] псевдослучайные байты.
+        // Клиент осознанно указывает номер ДЦ только если число лежит в диапазоне [-5..5] (кроме 0) или ±203.
+        // Если число случайное — берем номер ДЦ по IP-адресу (guessedDc), а isMedia жестко ставим в false,
+        // чтобы исключить 50% сбоев и разрывов связи из-за попадания на чужие медийные кластеры.
+        val o0 = decryptedHs[60].toInt() and 0xFF
+        val o1 = decryptedHs[61].toInt() and 0xFF
+        val own = ((o0 or (o1 shl 8)).toShort()).toInt()
+
+        val dc: Int
+        val isMedia: Boolean
+
+        if (own == 203 || own == -203) {
+            dc = 203
+            isMedia = (own < 0)
+        } else if (own in -5..5 && own != 0) {
+            dc = if (own < 0) -own else own
+            isMedia = (own < 0)
+        } else {
+            dc = if (guessedDc in 1..5 || guessedDc == 203) guessedDc else 2
+            isMedia = false
         }
 
         // 2. Инициализируем шифратор для ответов прямому клиенту (dirEncKey, dirEncIv)

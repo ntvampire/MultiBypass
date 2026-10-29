@@ -39,7 +39,8 @@ object TelegramDcRanges {
         parseCidr("149.154.164.0/22") toDc 2,
         parseCidr("91.108.8.0/22") toDc 2,
         parseCidr("91.108.16.0/22") toDc 2,
-        parseCidr("91.105.192.0/23") toDc 2,
+        // Подсеть DC 203 (отдельный медийный ДЦ Telegram)
+        parseCidr("91.105.192.0/23") toDc 203,
         // Подсети DC 3 (Miami)
         parseCidr("149.154.175.0/24") toDc 3,
         // Подсети DC 4 (Amsterdam)

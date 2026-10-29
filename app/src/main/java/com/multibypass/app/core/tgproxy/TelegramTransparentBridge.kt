@@ -21,17 +21,10 @@ object TelegramTransparentBridge {
     private const val TAG = "TgTransparentBridge"
     private const val BUFFER_SIZE = 32768
     private const val SOCKET_TIMEOUT_MS = 30000
-    private const val DIRECT_PROBE_TIMEOUT_MS = 1000
-    private const val CACHE_TTL_MS = 3 * 60 * 1000L // 3 минуты кэш маршрута
-
-    enum class RouteMode { DIRECT, STGWS }
-
-    // Кэш решений по номерам ДЦ (dc -> Mode + Timestamp)
-    private val dcRouteCache = ConcurrentHashMap<Int, Pair<RouteMode, Long>>()
 
     fun clearCache() {
-        dcRouteCache.clear()
-        Log.d(TAG, "Telegram DC route cache cleared (handover / refresh)")
+        // Сброс состояния при смене сети
+        Log.d(TAG, "Telegram bridge reset (handover / refresh)")
     }
 
     suspend fun handleConnection(
@@ -43,7 +36,6 @@ object TelegramTransparentBridge {
         fallbackDownstreamPort: Int = 1080
     ) = withContext(Dispatchers.IO) {
         var proxySocket: Socket? = null
-        var directSocket: Socket? = null
 
         try {
             clientSocket.tcpNoDelay = true
@@ -61,48 +53,9 @@ object TelegramTransparentBridge {
 
             val guessedDc = TelegramDcRanges.guessDcForIp(targetIp)
 
-            // 2. Проверяем кэш прямого пути для данного ДЦ
-            val cached = dcRouteCache[guessedDc]
-            val isCacheValid = cached != null && (System.currentTimeMillis() - cached.second < CACHE_TTL_MS)
-            val currentMode = if (isCacheValid) cached?.first else null
-
-            var useDirect = (currentMode == RouteMode.DIRECT)
-
-            // Если статус ещё не известен — пробуем прямое подключение к IP назначения («проверка боем»)
-            if (currentMode == null) {
-                try {
-                    val dSocket = Socket()
-                    dSocket.tcpNoDelay = true
-                    dSocket.soTimeout = SOCKET_TIMEOUT_MS
-                    dSocket.connect(InetSocketAddress(targetIp, targetPort), DIRECT_PROBE_TIMEOUT_MS)
-                    directSocket = dSocket
-                    useDirect = true
-                    dcRouteCache[guessedDc] = Pair(RouteMode.DIRECT, System.currentTimeMillis())
-                    Log.i(TAG, "Telegram DC $guessedDc ($targetIp:$targetPort) is directly ACCESSIBLE. Using high-speed direct path!")
-                } catch (e: Exception) {
-                    useDirect = false
-                    try { directSocket?.close() } catch (_: Exception) {}
-                    directSocket = null
-                    dcRouteCache[guessedDc] = Pair(RouteMode.STGWS, System.currentTimeMillis())
-                    Log.d(TAG, "Telegram DC $guessedDc ($targetIp:$targetPort) direct connect failed (${e.message}). Routing via sTGWS Cloudflare bridge.")
-                }
-            }
-
-            // 3. Быстрый прямой путь (Direct Fast-Path)
-            if (useDirect) {
-                if (directSocket == null) {
-                    val dSocket = Socket()
-                    dSocket.tcpNoDelay = true
-                    dSocket.soTimeout = SOCKET_TIMEOUT_MS
-                    dSocket.connect(InetSocketAddress(targetIp, targetPort), 2500)
-                    directSocket = dSocket
-                }
-
-                bridgeDirect(clientSocket, directSocket, clientHs)
-                return@withContext
-            }
-
-            // 4. Обходной путь sTGWS (WebSocket-мост через Cloudflare)
+            // 2. Обходной путь sTGWS (WebSocket-мост через Cloudflare)
+            // Прямые подключения к IP дата-центров блокируются ТСПУ по содержимому (drop после TCP SYN-ACK).
+            // Поэтому весь трафик MTProto надежно транслируется в защищенный локальный мост sTGWS.
             val session = TelegramHandshakeTranslator.translateHandshake(
                 clientHs = clientHs,
                 proxySecretHex = secret,
@@ -174,57 +127,7 @@ object TelegramTransparentBridge {
         } finally {
             try { clientSocket.close() } catch (_: Exception) {}
             try { proxySocket?.close() } catch (_: Exception) {}
-            try { directSocket?.close() } catch (_: Exception) {}
         }
-    }
-
-    private suspend fun bridgeDirect(
-        clientSocket: Socket,
-        directSocket: Socket,
-        clientHs: ByteArray
-    ) = coroutineScope {
-        val dOut = directSocket.getOutputStream()
-        val dIn = directSocket.getInputStream()
-        val cOut = clientSocket.getOutputStream()
-        val cIn = clientSocket.getInputStream()
-
-        // Передаем исходное рукопожатие прямому серверу Telegram
-        dOut.write(clientHs)
-        dOut.flush()
-
-        val clientToDirect = launch {
-            val buffer = ByteArray(BUFFER_SIZE)
-            try {
-                while (isActive) {
-                    val n = cIn.read(buffer)
-                    if (n <= 0) break
-                    dOut.write(buffer, 0, n)
-                    dOut.flush()
-                }
-            } catch (_: Exception) {
-            } finally {
-                try { directSocket.shutdownOutput() } catch (_: Exception) {}
-            }
-        }
-
-        val directToClient = launch {
-            val buffer = ByteArray(BUFFER_SIZE)
-            try {
-                while (isActive) {
-                    val n = dIn.read(buffer)
-                    if (n <= 0) break
-                    cOut.write(buffer, 0, n)
-                    cOut.flush()
-                }
-            } catch (_: Exception) {
-            } finally {
-                try { clientSocket.shutdownOutput() } catch (_: Exception) {}
-            }
-        }
-
-        selectFirst(clientToDirect, directToClient)
-        clientToDirect.cancel()
-        directToClient.cancel()
     }
 
     private fun readFully(inputStream: InputStream, buffer: ByteArray): Boolean {

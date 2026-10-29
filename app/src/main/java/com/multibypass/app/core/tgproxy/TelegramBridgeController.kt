@@ -66,14 +66,13 @@ object TelegramBridgeController {
     private fun ensureCfDomainsCache(context: Context) {
         try {
             val cacheFile = File(context.cacheDir, "cfproxy-domains-cache.txt")
-            if (!cacheFile.exists() || cacheFile.length() == 0L) {
-                context.assets.open("cfproxy_domains.txt").use { input ->
-                    cacheFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+            // Всегда синхронизируем актуальный проверенный список доменов из assets
+            context.assets.open("cfproxy_domains.txt").use { input ->
+                cacheFile.outputStream().use { output ->
+                    input.copyTo(output)
                 }
-                Log.i(TAG, "Pre-seeded cfproxy-domains-cache.txt from assets")
             }
+            Log.i(TAG, "Synchronized cfproxy-domains-cache.txt from assets (${cacheFile.length()} bytes)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to ensure CF domains cache: ${e.message}")
         }
