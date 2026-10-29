@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -250,13 +251,14 @@ fun AutoStrategyScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 res.workingServices.forEach { sName ->
+                                                    val shortName = formatServiceName(sName)
                                                     val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
                                                     Surface(
                                                         shape = RoundedCornerShape(4.dp),
                                                         color = GreenPrimary.copy(alpha = 0.15f)
                                                     ) {
                                                         Text(
-                                                            text = "$sName$sLat",
+                                                            text = "$shortName$sLat",
                                                             style = MaterialTheme.typography.labelSmall,
                                                             color = GreenPrimary,
                                                             fontSize = 10.sp,
@@ -277,22 +279,31 @@ fun AutoStrategyScreen(
                                 }
 
                                 if (res.isWorking) {
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     val isCurrent = antiDpiConfig.strategy == res.strategy
-                                    if (isCurrent) {
-                                        Text("Активна", color = GreenPrimary, fontWeight = FontWeight.Bold)
-                                    } else {
-                                        FilledTonalButton(
-                                            onClick = {
+                                    Surface(
+                                        onClick = {
+                                            if (!isCurrent) {
                                                 repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = res.strategy))
                                                 if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
                                                     coroutineScope.launch {
                                                         ByeDpiController.start(strategy = res.strategy)
                                                     }
                                                 }
-                                            },
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("Применить")
+                                            }
+                                        },
+                                        enabled = !isCurrent,
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isCurrent) GreenPrimary else DarkSurfaceVariant,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = if (isCurrent) "Активна" else "Применить",
+                                                tint = if (isCurrent) Color.White else TextSecondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -305,4 +316,12 @@ fun AutoStrategyScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+private fun formatServiceName(name: String): String = when (name.trim().lowercase()) {
+    "youtube", "yt" -> "YT"
+    "youtube video", "ytv" -> "YTV"
+    "instagram", "ig" -> "IG"
+    "facebook", "fb" -> "FB"
+    else -> name
 }

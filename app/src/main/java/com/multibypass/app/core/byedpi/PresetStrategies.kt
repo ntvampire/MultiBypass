@@ -50,10 +50,10 @@ object PresetStrategies {
     )
 
     val defaultTestTargets = listOf(
-        TestTarget("YouTube", "https://www.youtube.com/generate_204"),
-        TestTarget("YouTube Video", "https://redirector.googlevideo.com/generate_204"),
-        TestTarget("Instagram", "https://www.instagram.com"),
-        TestTarget("Facebook", "https://www.facebook.com")
+        TestTarget("YT", "https://www.youtube.com/generate_204"),
+        TestTarget("YTV", "https://redirector.googlevideo.com/generate_204"),
+        TestTarget("IG", "https://www.instagram.com"),
+        TestTarget("FB", "https://www.facebook.com")
     )
 
     fun loadStrategies(context: Context): List<String> {

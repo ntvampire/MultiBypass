@@ -255,13 +255,14 @@ fun AntiDpiGroupScreen(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             best.workingServices.forEach { sName ->
+                                                val shortName = formatServiceName(sName)
                                                 val sLat = best.serviceLatencies[sName]?.let { " ${it}мс" } ?: ""
                                                 Surface(
                                                     shape = RoundedCornerShape(6.dp),
                                                     color = GreenPrimary.copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "$sName$sLat",
+                                                        text = "$shortName$sLat",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = GreenPrimary,
                                                         fontSize = 11.sp,
@@ -448,4 +449,12 @@ fun AntiDpiGroupScreen(
             }
         )
     }
+}
+
+private fun formatServiceName(name: String): String = when (name.trim().lowercase()) {
+    "youtube", "yt" -> "YT"
+    "youtube video", "ytv" -> "YTV"
+    "instagram", "ig" -> "IG"
+    "facebook", "fb" -> "FB"
+    else -> name
 }

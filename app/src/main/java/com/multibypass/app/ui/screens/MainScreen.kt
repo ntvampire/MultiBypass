@@ -260,7 +260,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "YouTube, Discord, Rutracker (${antiDpiConfig.domains.size} адресов)",
+                        text = "YouTube и еще ${antiDpiConfig.domains.size} адресов",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -286,7 +286,7 @@ fun MainScreen(
                             Icon(Icons.Default.Send, contentDescription = null, tint = GreenPrimary)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Обход Telegram (sTGWS)",
+                                text = "Обход Telegram",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
