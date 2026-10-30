@@ -5,7 +5,7 @@
 
   <p>
     <a href="https://github.com/ntvampire/MultiBypass"><img src="https://img.shields.io/badge/%D0%A1%D1%82%D0%B0%D1%82%D1%83%D1%81-%D0%90%D0%BA%D1%82%D0%B8%D0%B2%D0%B5%D0%BD-brightgreen?style=flat-square" alt="Статус: Активен" /></a>
-    <a href="https://github.com/ntvampire/MultiBypass/releases/latest"><img src="https://img.shields.io/badge/%D0%A0%D0%B5%D0%BB%D0%B8%D0%B7-v3.0.0-007acc?style=flat-square" alt="Релиз v3.0.0" /></a>
+    <a href="https://github.com/ntvampire/MultiBypass/releases/latest"><img src="https://img.shields.io/badge/%D0%A0%D0%B5%D0%BB%D0%B8%D0%B7-v3.1.1-007acc?style=flat-square" alt="Релиз v3.0.0" /></a>
     <a href="https://github.com/ntvampire/MultiBypass/actions"><img src="https://img.shields.io/github/actions/workflow/status/ntvampire/MultiBypass/release.yml?style=flat-square&label=%D0%A1%D0%B1%D0%BE%D1%80%D0%BA%D0%B0" alt="Статус сборки" /></a>
     <img src="https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-Android%209%2B-green?style=flat-square&logo=android" alt="Платформа: Android 9+" />
     <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-blue?style=flat-square" alt="Лицензия: MIT" /></a>
@@ -38,13 +38,18 @@ MultiBypass объединяет локальный VPN-шлюз и диспет
 
 ```mermaid
 flowchart TD
-    Apps["Приложения устройства"] --> TUN["VpnService / hev-socks5-tunnel (TUN → SOCKS5)"]
-    TUN --> Disp["Socks5Dispatcher (127.0.0.1:1088)"]
+    subgraph VPN["Основной VPN-туннель (VpnService)"]
+        Apps["Приложения устройства"] --> TUN["TUN → SOCKS5 (hev-socks5-tunnel)"]
+        TUN --> Disp["Socks5Dispatcher (127.0.0.1:1088)"]
+        Disp -->|"DNS-запросы (UDP/TCP :53)"| DNS["SmartHostsDnsRelay\n(База хостов + System DNS)"]
+        Disp -->|"Сегментируемый трафик"| AntiDPI["ByeByeDPI (ciadpi Engine)\n(Десинхронизация TCP / TLS ClientHello)"]
+        Disp -->|"Прямой трафик"| Direct["Прямое сетевое соединение"]
+    end
 
-    Disp -->|"DNS-запросы (UDP/TCP :53)"| DNS["SmartHostsDnsRelay\n(Локальная база хостов + System DNS)"]
-    Disp -->|"Telegram MTProto (AS44907, AS62041)"| TG["TelegramBridge (sTGWS)\n(Локальный мост → Cloudflare WSS)"]
-    Disp -->|"Сегментируемый трафик"| AntiDPI["ByeByeDPI (ciadpi Engine)\n(Десинхронизация TCP / TLS ClientHello)"]
-    Disp -->|"Остальной сетевой трафик"| Direct["Прямое сетевое соединение"]
+    subgraph TGProxy["Автономный MTProto WS-прокси"]
+        TGApp["Клиенты Telegram\n(Official / AyuGram / Neko / Plus)"] -->|"MTProto (127.0.0.1:1443)"| TGSvc["TelegramProxyService\n(libtgwsproxy.so)"]
+        TGSvc -->|"WebSocket / TLS (/apiws)"| CF["CDN Cloudflare WSS"]
+    end
 ```
 
 ---
@@ -57,11 +62,11 @@ flowchart TD
 - **Автоматический замер метрик (Benchmark / Автоподбор)**: фоновое циклическое тестирование стратегий с замером времени сетевого отклика (RTT, latency в мс) к контрольным узлам и мгновенная активация лучшего профиля.
 - Гранулярная фильтрация целевых доменов и приложений.
 
-### 2. Прозрачное WebSocket-туннелирование данных (Telegram)
-- Автоматический перехват потоков данных к дата-центрам Telegram (AS44907, AS62041).
-- Трансляция MTProto-хендшейка в защищенный WebSocket/TLS туннель через CDN Cloudflare (`/apiws`).
-- Полностью прозрачная работа без необходимости ручной настройки SOCKS/MTProto-прокси внутри клиента Telegram.
-- Надежная адресация медийных дата-центров (DC 1–5, DC 203) и балансировка пула доменов.
+### 2. Автономный WebSocket-прокси для Telegram
+- Независимый локальный MTProto-прокси демон на порту `127.0.0.1:1443` (инкапсуляция в WebSocket/TLS через сеть Cloudflare `/apiws`).
+- Полная автономность: работает независимо от основного VPN-туннеля (не требует включения Telegram в список раздельного туннелирования).
+- Управление в один клик: плитка Quick Settings в системной шторке Android и мгновенный экспорт настроек прокси в клиенты Telegram (официальный, Nekogram, AyuGram, Plus и др.).
+- Высокая стабильность: удержание WakeLock во время активности, защитный тайм-аут остановки и мониторинг объема переданного трафика в реальном времени.
 
 ### 3. Локальный SmartHosts & DNS-релей
 - Мгновенная локальная адресация (0 мс) зарубежных облачных сервисов (AI-платформы, средства разработки, дизайн-системы) через европейские SNI-шлюзы по проверенной базе `smart-no-crutch`.
@@ -84,11 +89,11 @@ flowchart TD
 ## 📥 Загрузка (Сборки APK)
 
 Готовые скомпилированные и подписанные пакеты размещаются в разделе релизов репозитория:  
-👉 **[Перейти к релизу MultiBypass v3.0.0 на GitHub](https://github.com/ntvampire/MultiBypass/releases/latest)**
+👉 **[Перейти к релизу MultiBypass v3.1.1 на GitHub](https://github.com/ntvampire/MultiBypass/releases/latest)**
 
-- **`MultiBypass-v3.0.0-arm64-v8a.apk`** — 64-битная архитектура ARM (рекомендуется для большинства современных устройств на Android 9+).
-- **`MultiBypass-v3.0.0-universal.apk`** — универсальный пакет, содержащий бинарные библиотеки для всех поддерживаемых архитектур.
-- **`MultiBypass-v3.0.0-armeabi-v7a.apk`** — 32-битная архитектура ARM для более ранних моделей устройств.
+- **`MultiBypass-v3.1.1-arm64-v8a.apk`** — 64-битная архитектура ARM (рекомендуется для большинства современных устройств на Android 9+).
+- **`MultiBypass-v3.1.1-universal.apk`** — универсальный пакет, содержащий бинарные библиотеки для всех поддерживаемых архитектур.
+- **`MultiBypass-v3.1.1-armeabi-v7a.apk`** — 32-битная архитектура ARM для более ранних моделей устройств.
 
 ---
 
@@ -102,8 +107,8 @@ flowchart TD
 - **[hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)** (автор: [@heiher](https://github.com/heiher))  
   Высокопроизводительный транслятор интерфейса TUN в протокол SOCKS5 (`libhev-socks5-tunnel.so`).
 
-- **[tgws / Telegram WS Proxy](https://github.com/coyove/tgws)** (и реализация MTProto WebSocket на Rust)  
-  Сетевой транспорт для инкапсуляции трафика MTProto в WebSocket (`libtgwsproxy.so`).
+- **[tg-ws-proxy](https://github.com/Flowseal/zapret-discord-youtube)** / **[tg-ws-proxy-android](https://github.com/amurcanov/tg-ws-proxy-android)** (авторы: Flowseal, amurcanov, coyove)  
+  Высокопроизводительный нативный демон инкапсуляции трафика MTProto в WebSocket over TLS (`libtgwsproxy.so`).
 
 - **[RussiaFancyLists](https://github.com/Noktomezo/RussiaFancyLists)** (автор: [@Noktomezo](https://github.com/Noktomezo))  
   База соответствий доменов и адресов (`smart-no-crutch`) для локальной маршрутизации и адресации хостов.
