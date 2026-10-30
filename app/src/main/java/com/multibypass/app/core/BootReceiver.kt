@@ -3,6 +3,7 @@ package com.multibypass.app.core
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.repository.SettingsRepository
 
@@ -12,6 +13,9 @@ class BootReceiver : BroadcastReceiver() {
             val repository = SettingsRepository.getInstance(context)
             if (repository.bootAutoStart.value) {
                 MultiBypassVpnService.start(context)
+                if (repository.tgConfig.value.enabled) {
+                    TelegramProxyService.start(context)
+                }
             }
         }
     }

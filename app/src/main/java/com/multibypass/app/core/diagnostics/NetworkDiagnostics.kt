@@ -5,7 +5,7 @@ import android.os.Build
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramBridgeController
+import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -209,71 +209,37 @@ object NetworkDiagnostics {
             }
         }
 
-        // 5. Telegram Check (sTGWS, прямой режим)
+        // 5. Telegram Proxy Check (Локальный MTProto прокси)
         val tgConfig = repository.tgConfig.value
         if (!tgConfig.enabled) {
             steps.add(
                 DiagnosticStepResult(
-                    title = "Обход Telegram (sTGWS)",
+                    title = "Обход Telegram",
                     description = "Отключен пользователем",
                     status = DiagnosticStatus.SKIPPED,
                     detail = "Трафик Telegram направляется напрямую через провайдера"
                 )
             )
         } else {
-            val isBridgeListening = isTcpPortOpen("127.0.0.1", TelegramBridgeController.LOCAL_PROXY_PORT, 1000)
-            val isVpnConnected = (vpnStatus == VpnStatus.CONNECTED)
-
-            if (!isVpnConnected) {
+            val isProxyListening = isTcpPortOpen("127.0.0.1", tgConfig.port, 1000)
+            if (isProxyListening) {
                 steps.add(
                     DiagnosticStepResult(
-                        title = "Telegram (sTGWS)",
-                        description = "VPN не подключен",
-                        status = DiagnosticStatus.WARNING,
-                        detail = "Прозрачный перехват требует активного VPN-туннеля"
-                    )
-                )
-            } else if (!isBridgeListening) {
-                steps.add(
-                    DiagnosticStepResult(
-                        title = "Telegram (sTGWS)",
-                        description = "Служба туннелирования остановлена",
-                        status = DiagnosticStatus.ERROR,
-                        detail = "Локальный мост 127.0.0.1:1443 не отвечает"
+                        title = "Обход Telegram",
+                        description = "Локальный MTProto прокси активен (127.0.0.1:${tgConfig.port})",
+                        status = DiagnosticStatus.SUCCESS,
+                        detail = "Клиент подключается локально независимо от VPN"
                     )
                 )
             } else {
-                val tgStart = System.currentTimeMillis()
-                val isDirectConnOk = testSocks5TcpConnect(
-                    proxyHost = "127.0.0.1",
-                    proxyPort = com.multibypass.app.core.vpn.Socks5Dispatcher.DEFAULT_PORT,
-                    targetIp = "149.154.167.50",
-                    targetPort = 443,
-                    timeoutMs = 3000
+                steps.add(
+                    DiagnosticStepResult(
+                        title = "Обход Telegram",
+                        description = "Служба прокси остановлена",
+                        status = DiagnosticStatus.ERROR,
+                        detail = "Локальный порт 127.0.0.1:${tgConfig.port} не отвечает"
+                    )
                 )
-                val tgTime = System.currentTimeMillis() - tgStart
-
-                if (isDirectConnOk) {
-                    steps.add(
-                        DiagnosticStepResult(
-                            title = "Telegram (sTGWS)",
-                            description = "Прямой обход активен ($tgTime мс)",
-                            status = DiagnosticStatus.SUCCESS,
-                            latencyMs = tgTime,
-                            detail = "Трафик прозрачно туннелируется через Cloudflare (прокси в TG не требуется)"
-                        )
-                    )
-                } else {
-                    steps.add(
-                        DiagnosticStepResult(
-                            title = "Telegram (sTGWS)",
-                            description = "Локальный шлюз активен, прямой отклик DC задержан",
-                            status = DiagnosticStatus.WARNING,
-                            latencyMs = tgTime,
-                            detail = "Возможна задержка подключения к шлюзам Cloudflare"
-                        )
-                    )
-                }
             }
         }
 

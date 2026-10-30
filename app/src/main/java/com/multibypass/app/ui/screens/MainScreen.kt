@@ -24,7 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramBridgeController
+import com.multibypass.app.core.tgproxy.TelegramProxyController
+import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -42,7 +43,7 @@ fun MainScreen(
     val repository = remember { SettingsRepository.getInstance(context) }
 
     val vpnStatus by MultiBypassVpnService.vpnStatus.collectAsState()
-    val isTgProxyRunning by TelegramBridgeController.isRunning.collectAsState()
+    val isTgProxyRunning by TelegramProxyService.isRunning.collectAsState()
 
     val smartHostsConfig by repository.smartHostsConfig.collectAsState()
     val smartHostsCount by SmartHostsManager.domainCount.collectAsState()
@@ -269,7 +270,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Pillar 3: Telegram sTGWS Card
+            // Telegram MTProto Proxy Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -296,11 +297,9 @@ fun MainScreen(
                             onCheckedChange = { isChecked ->
                                 repository.updateTgConfig(tgConfig.copy(enabled = isChecked))
                                 if (isChecked) {
-                                    if (isConnected) {
-                                        TelegramBridgeController.start(context, tgConfig.secret)
-                                    }
+                                    TelegramProxyService.start(context)
                                 } else {
-                                    TelegramBridgeController.stop()
+                                    TelegramProxyService.stop(context)
                                 }
                             }
                         )
@@ -308,34 +307,32 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    if (tgConfig.enabled) {
-                        Text(
-                            text = if (isConnected && isTgProxyRunning) "● Прозрачный туннель Cloudflare активен"
-                            else if (isTgProxyRunning) "○ Ожидает запуск VPN"
-                            else "○ Служба остановлена",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isConnected && isTgProxyRunning) GreenPrimary else TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = GreenPrimary.copy(alpha = 0.12f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "💡 В настройках Telegram отключите прокси (Данные и память → Прокси). Обход работает прозрачно!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = GreenPrimary,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = "Отключен (трафик Telegram не перехватывается)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
+                    Text(
+                        text = if (isTgProxyRunning) "● Прокси активен на 127.0.0.1:${tgConfig.port}" else "○ Остановлен",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isTgProxyRunning) GreenPrimary else TextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = { TelegramProxyController.openTelegramProxy(context, tgConfig.port) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Подключить в Telegram (1 клик)")
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Прокси работает локально на устройстве независимо от VPN. Нажмите кнопку один раз для активации в клиенте Telegram.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
                 }
             }
 

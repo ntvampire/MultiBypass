@@ -11,7 +11,7 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.util.Log
 import com.multibypass.app.core.byedpi.ByeDpiController
-import com.multibypass.app.core.tgproxy.TelegramBridgeController
+import com.multibypass.app.core.tgproxy.TelegramProxyService
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -104,18 +104,27 @@ object ServiceWatchdog {
 
     private suspend fun checkTelegramProxy(context: Context, repository: SettingsRepository, source: String) {
         val tgConfig = repository.tgConfig.value
-        val vpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
-        if (!tgConfig.enabled || !vpnConnected) {
+        if (!tgConfig.enabled) {
             return
         }
 
-        val port = TelegramBridgeController.LOCAL_PROXY_PORT
+        val port = tgConfig.port
         val isListening = isPortListening("127.0.0.1", port, PROBE_TIMEOUT_MS)
 
         if (!isListening) {
-            Log.w(TAG, "Watchdog ($source): Native TG Proxy on 127.0.0.1:$port is unreachable. Restarting...")
-            val success = TelegramBridgeController.restart(context, tgConfig.secret)
-            Log.i(TAG, "Watchdog ($source): TG Proxy restart success=$success")
+            Log.w(TAG, "Watchdog ($source): TG Proxy on 127.0.0.1:$port is unreachable. Restarting...")
+            TelegramProxyService.updateRunningState(false)
+            val success = TelegramProxyService.restartProxy(context)
+            if (success) {
+                delay(400)
+                val recovered = isPortListening("127.0.0.1", port, PROBE_TIMEOUT_MS)
+                Log.i(TAG, "Watchdog ($source): TG Proxy restart recovered=$recovered")
+                TelegramProxyService.updateRunningState(recovered)
+            }
+        } else {
+            if (!TelegramProxyService.isRunning.value) {
+                TelegramProxyService.updateRunningState(true)
+            }
         }
     }
 

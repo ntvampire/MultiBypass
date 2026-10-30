@@ -145,7 +145,7 @@ class SettingsRepository(private val context: Context) {
 
         // Если обход выключен пользователем, гарантированно останавливаем сервис прокси
         if (wasEnabled && !config.enabled) {
-            com.multibypass.app.core.tgproxy.TelegramBridgeController.stop()
+            com.multibypass.app.core.tgproxy.TelegramProxyService.stop(context)
         }
     }
 
@@ -275,3 +275,4 @@ class SettingsRepository(private val context: Context) {
         return bytes.joinToString("") { "%02x".format(it) }
     }
 }
+

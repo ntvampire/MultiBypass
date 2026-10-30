@@ -3,10 +3,6 @@ package com.multibypass.app.core.vpn
 import android.content.Context
 import android.util.Log
 import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
-import com.multibypass.app.core.tgproxy.TelegramBridgeController
-import com.multibypass.app.core.tgproxy.TelegramDcRanges
-import com.multibypass.app.core.tgproxy.TelegramTransparentBridge
-import com.multibypass.app.data.repository.SettingsRepository
 import kotlinx.coroutines.*
 import java.io.InputStream
 import java.io.OutputStream
@@ -22,13 +18,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Локальный SOCKS5-диспетчер трафика:
- * Принимает входящие соединения от hev-socks5-tunnel и выполняет прозрачную маршрутизацию:
- * - Прямые TCP-соединения к серверам Telegram (AS44907, AS62041) перехватываются и
- *   направляются в прозрачный sTGWS-мост (прямой скоростной путь либо WebSocket к Cloudflare).
- * - Весь остальной TCP-трафик (сайты, сервисы) передаётся в ByeByeDPI (порт 1080) для обхода DPI.
+ * Принимает входящие соединения от hev-socks5-tunnel и выполняет маршрутизацию:
+ * - Все TCP-соединения передаются в ByeByeDPI (порт 1080) для обхода DPI.
  * - UDP-трафик (UDP ASSOCIATE):
  *   * DNS-запросы (порт 53) перехватываются SmartHostsDnsRelay (обход геоблока + нативный DNS оператора).
- *   * Прочий UDP-трафик передается в ByeByeDPI.
+ *   * Прочий UDP-трафик передается напрямую через защищенный сокет.
  */
 object Socks5Dispatcher {
 
@@ -150,7 +144,7 @@ object Socks5Dispatcher {
 
             // Обработка UDP ASSOCIATE (0x03)
             if (reqCmd == 0x03) {
-                relayUdpAssociate(context, client, atyp, cIn, cOut, downstreamPort)
+                relayUdpAssociate(context, client, atyp, cIn, cOut)
                 return@withContext
             }
 
@@ -161,27 +155,23 @@ object Socks5Dispatcher {
             }
 
             // Считываем адрес назначения
-            val targetIp: String
             val rawAddrBytes: ByteArray
             when (atyp) {
                 0x01 -> { // IPv4 (4 байта)
                     val ip4Bytes = ByteArray(4)
                     readFully(cIn, ip4Bytes)
                     rawAddrBytes = ip4Bytes
-                    targetIp = "${ip4Bytes[0].toUByte()}.${ip4Bytes[1].toUByte()}.${ip4Bytes[2].toUByte()}.${ip4Bytes[3].toUByte()}"
                 }
                 0x03 -> { // Domain name (1 байт длина + имя)
                     val domainLen = cIn.read()
                     val domainBytes = ByteArray(domainLen)
                     readFully(cIn, domainBytes)
                     rawAddrBytes = byteArrayOf(domainLen.toByte()) + domainBytes
-                    targetIp = String(domainBytes, Charsets.US_ASCII)
                 }
                 0x04 -> { // IPv6
                     val ip6Bytes = ByteArray(16)
                     readFully(cIn, ip6Bytes)
                     rawAddrBytes = ip6Bytes
-                    targetIp = "ipv6"
                 }
                 else -> {
                     sendSocksReply(cOut, rep = 0x08) // Address type not supported
@@ -192,29 +182,9 @@ object Socks5Dispatcher {
 
             val p1 = cIn.read()
             val p2 = cIn.read()
-            val targetPort = ((p1 and 0xFF) shl 8) or (p2 and 0xFF)
 
-            // 3. Классификация маршрута: Telegram или ByeByeDPI
-            val repository = SettingsRepository.getInstance(context)
-            val tgConfig = repository.tgConfig.value
-            val isTransparentTgActive = tgConfig.enabled
-            val isTgTarget = (atyp == 0x01) && TelegramDcRanges.isTelegramTarget(targetIp, targetPort)
-
-            if (isTransparentTgActive && isTgTarget) {
-                // Прямой запрос к дата-центрам Telegram -> подтверждаем CONNECT и передаём в sTGWS мост
-                sendSocksReply(cOut, rep = 0x00, bndPort = targetPort)
-                TelegramTransparentBridge.handleConnection(
-                    clientSocket = client,
-                    targetIp = targetIp,
-                    targetPort = targetPort,
-                    localProxyPort = TelegramBridgeController.LOCAL_PROXY_PORT,
-                    secret = tgConfig.secret,
-                    fallbackDownstreamPort = downstreamPort
-                )
-            } else {
-                // Обычный трафик -> передаём в ByeByeDPI
-                forwardToDownstream(client, atyp, rawAddrBytes, p1.toByte(), p2.toByte(), downstreamPort)
-            }
+            // Все TCP-соединения передаются в downstream (ByeByeDPI)
+            forwardToDownstream(client, atyp, rawAddrBytes, p1.toByte(), p2.toByte(), downstreamPort)
 
         } catch (e: Exception) {
             try { client.close() } catch (_: Exception) {}
@@ -226,8 +196,7 @@ object Socks5Dispatcher {
         client: Socket,
         atyp: Int,
         cIn: InputStream,
-        cOut: OutputStream,
-        downstreamPort: Int
+        cOut: OutputStream
     ) {
         var localUdpSocket: DatagramSocket? = null
         try {
@@ -319,7 +288,7 @@ object Socks5Dispatcher {
                             continue
                         }
 
-                        // 2. Обычный UDP-трафик (QUIC / DNS оператора): передаем без блокировок
+                        // 2. Обычный UDP-трафик: передаем напрямую через защищенный сокет
                         try {
                             val directUdp = DatagramSocket()
                             MultiBypassVpnService.protectSocket(directUdp)

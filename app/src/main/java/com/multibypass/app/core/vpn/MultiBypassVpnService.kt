@@ -18,7 +18,6 @@ import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.smarthosts.SmartHostsManager
-import com.multibypass.app.core.tgproxy.TelegramBridgeController
 import com.multibypass.app.core.watchdog.ServiceWatchdog
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -57,15 +56,6 @@ class MultiBypassVpnService : VpnService() {
         fun protectSocket(socket: Socket): Boolean {
             return instance?.protect(socket) ?: false
         }
-
-        val TELEGRAM_APP_PACKAGES = setOf(
-            "org.telegram.messenger",
-            "org.telegram.messenger.web",
-            "org.telegram.plus",
-            "org.thunderdog.challegram",
-            "nekox.messenger",
-            "org.telegram.BifToGram"
-        )
 
         fun start(context: Context) {
             val intent = Intent(context, MultiBypassVpnService::class.java).apply {
@@ -143,7 +133,6 @@ class MultiBypassVpnService : VpnService() {
             try {
                 val repository = SettingsRepository.getInstance(applicationContext)
                 val antiDpiConfig = repository.antiDpiConfig.value
-                val tgConfig = repository.tgConfig.value
 
                 // 0. Initialize SmartHosts geoblock database
                 SmartHostsManager.initialize(applicationContext)
@@ -155,11 +144,6 @@ class MultiBypassVpnService : VpnService() {
                 try {
                     ByeDpiProxy.setDnsRedirectPort(0)
                 } catch (_: Exception) {}
-
-                // 2. Start Telegram sTGWS tunnel if enabled
-                if (tgConfig.enabled) {
-                    TelegramBridgeController.start(applicationContext, tgConfig.secret)
-                }
 
                 val routeAll = repository.routeAllApps.value
                 val allowedApps = repository.routedApps.value
@@ -188,12 +172,7 @@ class MultiBypassVpnService : VpnService() {
                     // Split-tunnel routing: If specific apps are selected and global mode is disabled, isolate them.
                     // All other apps bypass the VPN at the OS kernel level.
                     if (!routeAll && allowedApps.isNotEmpty()) {
-                        val effectiveApps = if (tgConfig.enabled) {
-                            (allowedApps + TELEGRAM_APP_PACKAGES).distinct()
-                        } else {
-                            allowedApps
-                        }
-                        for (pkg in effectiveApps) {
+                        for (pkg in allowedApps) {
                             try {
                                 addAllowedApplication(pkg)
                             } catch (e: Exception) {
@@ -213,7 +192,7 @@ class MultiBypassVpnService : VpnService() {
                 val fd = builder.establish() ?: throw IllegalStateException("VPN establish() failed")
                 tunFd = fd
 
-                // 4. Start Socks5Dispatcher to route Telegram DC traffic to sTGWS and everything else to ByeByeDPI
+                // 4. Start Socks5Dispatcher to route DNS to SmartHosts and TCP to ByeByeDPI
                 Socks5Dispatcher.start(
                     context = applicationContext,
                     listenPort = Socks5Dispatcher.DEFAULT_PORT,
@@ -292,11 +271,6 @@ class MultiBypassVpnService : VpnService() {
                     ByeDpiProxy.setDnsRedirectPort(0)
                 } catch (_: Exception) {}
 
-                val repository = SettingsRepository.getInstance(applicationContext)
-                if (repository.tgConfig.value.enabled) {
-                    TelegramBridgeController.stop()
-                }
-
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -336,7 +310,6 @@ class MultiBypassVpnService : VpnService() {
             try {
                 Log.i(TAG, "Migrating VPN components to new active network: $network")
                 com.multibypass.app.core.smarthosts.SmartHostsDnsRelay.refreshUpstreamDns(applicationContext)
-                com.multibypass.app.core.tgproxy.TelegramTransparentBridge.clearCache()
                 com.multibypass.app.core.vpn.Socks5Dispatcher.resetActiveConnections()
                 com.multibypass.app.core.watchdog.ServiceWatchdog.triggerCheck(500)
             } catch (e: Exception) {
