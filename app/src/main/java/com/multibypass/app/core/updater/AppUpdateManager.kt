@@ -280,6 +280,9 @@ object AppUpdateManager {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
                 }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE)
+                }
             }
 
             sessionId = packageInstaller.createSession(params)
