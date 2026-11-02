@@ -288,28 +288,44 @@ object Socks5Dispatcher {
                             continue
                         }
 
-                        // 2. Обычный UDP-трафик: передаем напрямую через защищенный сокет
-                        try {
-                            val directUdp = DatagramSocket()
-                            MultiBypassVpnService.protectSocket(directUdp)
-                            directUdp.soTimeout = 4000
-                            val targetAddress = InetAddress.getByName(destIp)
-                            val outPacket = DatagramPacket(payload, payload.size, targetAddress, uPort)
-                            directUdp.send(outPacket)
+                        // 2. Блокировка QUIC (UDP 443): мгновенный сброс, заставляющий YouTube и браузеры
+                        // сразу переключиться на TCP (HTTP/2), где работает десинхронизация ByeByeDPI.
+                        if (uPort == 443) {
+                            continue
+                        }
 
-                            val directRecv = ByteArray(65535)
-                            val inPacket = DatagramPacket(directRecv, directRecv.size)
-                            directUdp.receive(inPacket)
+                        // 3. Обычный UDP-трафик (STUN, VoIP, игры): асинхронная передача через защищенный сокет
+                        val targetClientAddr = clientUdpAddr
+                        val replyHdr = data.copyOfRange(0, headerOffset)
+                        scope.launch {
+                            var directUdp: DatagramSocket? = null
+                            try {
+                                directUdp = DatagramSocket()
+                                MultiBypassVpnService.protectSocket(directUdp)
+                                directUdp.soTimeout = 3000
+                                val targetAddress = InetAddress.getByName(destIp)
+                                val outPacket = DatagramPacket(payload, payload.size, targetAddress, uPort)
+                                directUdp.send(outPacket)
 
-                            if (clientUdpAddr != null) {
-                                val replyHeader = data.copyOfRange(0, headerOffset)
-                                val responsePayload = inPacket.data.copyOfRange(0, inPacket.length)
-                                val fullReply = replyHeader + responsePayload
-                                val clientReply = DatagramPacket(fullReply, fullReply.size, clientUdpAddr)
-                                localUdpSocket.send(clientReply)
+                                val directRecv = ByteArray(65535)
+                                val inPacket = DatagramPacket(directRecv, directRecv.size)
+                                directUdp.receive(inPacket)
+
+                                if (targetClientAddr != null && !localUdpSocket.isClosed) {
+                                    val responsePayload = inPacket.data.copyOfRange(0, inPacket.length)
+                                    val fullReply = replyHdr + responsePayload
+                                    val clientReply = DatagramPacket(fullReply, fullReply.size, targetClientAddr)
+                                    synchronized(localUdpSocket) {
+                                        if (!localUdpSocket.isClosed) {
+                                            localUdpSocket.send(clientReply)
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) {
+                            } finally {
+                                try { directUdp?.close() } catch (_: Exception) {}
                             }
-                            directUdp.close()
-                        } catch (_: Exception) {}
+                        }
                     }
                 } catch (_: Exception) {
                 } finally {

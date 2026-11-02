@@ -44,12 +44,18 @@ object ByeDpiController {
         }
     }
 
-    suspend fun start(strategy: String = "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c --block-quic", port: Int = DEFAULT_PORT) {
+    suspend fun start(strategy: String = "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c", port: Int = DEFAULT_PORT) {
         lock.withLock {
             stopLocked()
             delay(150)
 
-            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $strategy --auto=none" else " $strategy"
+            val sanitizedStrategy = if (strategy.contains("{sni}")) {
+                strategy.replace("{sni}", "www.google.com")
+            } else {
+                strategy
+            }
+
+            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy --auto=none" else " $sanitizedStrategy"
             val fullCmd = "ciadpi -i 127.0.0.1 -p $port$hostsArg"
             val args = parseArgs(fullCmd)
 
