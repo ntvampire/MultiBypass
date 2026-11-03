@@ -374,7 +374,7 @@ fun SettingsScreen(
                     Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "MultiBypass — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartHosts, ByeByeDPI, Telegram sTGWS).",
+                        text = "MultiBypass — утилита раздельной маршрутизации и обхода сетевых ограничений (SmartHosts, ByeByeDPI, Telegram WS Proxy).",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

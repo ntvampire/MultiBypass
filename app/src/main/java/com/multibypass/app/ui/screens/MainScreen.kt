@@ -156,7 +156,7 @@ fun MainScreen(
             // Status message
             Text(
                 text = when {
-                    isConnected -> "Защита активна: DPI, Telegram и зарубежные сервисы"
+                    isConnected -> "Обходы активны: DPI, Telegram и зарубежные сервисы"
                     isConnecting -> "Установка туннеля..."
                     else -> "Нажмите кнопку для активации обхода"
                 },
@@ -183,7 +183,7 @@ fun MainScreen(
                             Icon(Icons.Default.Public, contentDescription = null, tint = AccentBlue)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Обход геоблокировок",
+                                text = "Обход геоблока",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -207,7 +207,7 @@ fun MainScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         val totalCount = if (smartHostsCount > 0) smartHostsCount else smartHostsConfig.domainCount
                         Text(
-                            text = "База Noktomezo: ${if (totalCount > 0) "$totalCount адресов" else "подключена"}",
+                            text = if (totalCount > 0) "$totalCount адресов" else "База подключена",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
@@ -242,7 +242,7 @@ fun MainScreen(
                             Icon(Icons.Default.Shield, contentDescription = null, tint = AccentOrange)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Десинхронизация TCP (Анти-DPI)",
+                                text = "Обход DPI",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -261,7 +261,7 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "YouTube и еще ${antiDpiConfig.domains.size} адресов",
+                        text = "${antiDpiConfig.domains.size} адресов",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -323,7 +323,7 @@ fun MainScreen(
                     ) {
                         Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Подключить в Telegram (1 клик)")
+                        Text("Подключить в Telegram")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

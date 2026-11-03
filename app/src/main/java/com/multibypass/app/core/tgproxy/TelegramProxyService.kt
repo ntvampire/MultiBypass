@@ -493,12 +493,6 @@ object TelegramProxyController {
         val proxyHttpUrl = "https://t.me/proxy?server=127.0.0.1&port=$port&secret=$secret"
         val proxyTgUri = "tg://proxy?server=127.0.0.1&port=$port&secret=$secret"
 
-        // Copy proxy link to clipboard
-        try {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            clipboard?.setPrimaryClip(ClipData.newPlainText("Telegram Proxy", proxyTgUri))
-            Toast.makeText(context, "Настройки скопированы в буфер обмена", Toast.LENGTH_SHORT).show()
-        } catch (_: Exception) {}
 
         applyToTelegramPackages(context, proxyTgUri, proxyHttpUrl)
     }
