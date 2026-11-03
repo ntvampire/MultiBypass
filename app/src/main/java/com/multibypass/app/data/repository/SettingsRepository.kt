@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 10
+        private const val CURRENT_DOMAINS_VERSION = 11
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -101,12 +101,13 @@ class SettingsRepository(private val context: Context) {
                 updateRoutedApps(currentRouted.distinct())
             }
 
-            // Remove legacy strategies.txt cache if it existed so updated presets take effect
+            // Invalidate legacy cached list files so updated bundled presets and lists take immediate effect
             try {
-                val cachedStrategies = java.io.File(context.filesDir, "strategies.txt")
-                if (cachedStrategies.exists()) {
-                    cachedStrategies.delete()
-                }
+                java.io.File(context.filesDir, "strategies.txt").takeIf { it.exists() }?.delete()
+                java.io.File(context.filesDir, "proxytest_strategies.list").takeIf { it.exists() }?.delete()
+                java.io.File(context.filesDir, "smart-no-crutch.hosts").takeIf { it.exists() }?.delete()
+                java.io.File(context.filesDir, "domains_antidpi.txt").takeIf { it.exists() }?.delete()
+                java.io.File(context.filesDir, "domains_antidpi_clean.txt").takeIf { it.exists() }?.delete()
             } catch (_: Exception) {}
 
             prefs.edit().putInt(KEY_DOMAINS_VERSION, CURRENT_DOMAINS_VERSION).apply()

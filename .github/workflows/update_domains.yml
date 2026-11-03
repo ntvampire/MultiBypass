@@ -2,8 +2,8 @@ name: Update Mobile Lists, Strategies & Providers
 
 on:
   schedule:
-    # Run weekly on Wednesdays at 04:37 UTC (offset non-standard minute to avoid GitHub Actions peak traffic)
-    - cron: '37 4 * * 3'
+    # Run daily at 04:37 UTC (offset non-standard minute to avoid GitHub Actions peak traffic)
+    - cron: '37 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes in domain lists, strategies or providers."
           else
-            git commit -m "chore(lists): automatic weekly update of domain lists, strategies and providers"
+            git commit -m "chore(lists): automatic daily update of domain lists, smart-hosts and strategies"
             git push
           fi

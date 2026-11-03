@@ -1,14 +1,19 @@
 {
-  "version": 10,
-  "updated_at": "2026-10-28T10:46:48Z",
+  "version": 11,
+  "updated_at": "2026-11-03T07:54:06Z",
   "antidpi": {
     "count": 66,
     "sha256": "dedbd65f9e84811fa8b9594097ea51693a54b89054e343ec40c522cbd6d56c27",
     "filename": "domains_antidpi.txt"
   },
   "strategies": {
-    "count": 66,
-    "sha256": "aff4eaa8ef30707c5ea73340e74844eeda32545d35175ade642d8b493375986e",
+    "count": 22,
+    "sha256": "9ad167020829d0db9180b1bcd38d13bfb9a0295bac38db14d0f7f2476b1d8cde",
     "filename": "strategies.txt"
+  },
+  "smarthosts": {
+    "count": 1197,
+    "sha256": "40a8fc24cfd011296002a018544360dfa9f9b46c78944471c866568fd6eda4d8",
+    "filename": "smart-no-crutch.hosts"
   }
 }

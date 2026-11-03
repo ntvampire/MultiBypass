@@ -23,8 +23,8 @@ data class ListUpdateResult(
 object ListUpdateManager {
     private const val TAG = "ListUpdateManager"
 
-    // Noktomezo RussiaFancyLists smart-no-crutch hosts URL
-    private const val NOKTOMEZO_HOSTS_URL = "https://raw.githubusercontent.com/Noktomezo/RussiaFancyLists/main/lists/hosts/smart-no-crutch.hosts"
+    // Noktomezo RussiaFancyLists upstream fallback
+    private const val NOKTOMEZO_FALLBACK_URL = "https://raw.githubusercontent.com/Noktomezo/RussiaFancyLists/main/lists/hosts/smart-no-crutch.hosts"
 
     // Primary: GitHub Pages. Fallback: GitHub raw repo
     private const val BASE_PAGES_URL = "https://ntvampire.github.io/MultiBypass"
@@ -32,7 +32,11 @@ object ListUpdateManager {
 
     suspend fun forceUpdateAll(context: Context): ListUpdateResult = withContext(Dispatchers.IO) {
         try {
-            val smartHostsContent = fetchUrlWithRetry(NOKTOMEZO_HOSTS_URL)
+            var smartHostsContent = fetchWithFallback(SmartHostsManager.HOSTS_FILE_NAME)
+            if (smartHostsContent.isBlank()) {
+                Log.d(TAG, "Primary smart-hosts fetch failed, trying upstream fallback: $NOKTOMEZO_FALLBACK_URL")
+                smartHostsContent = fetchUrlWithRetry(NOKTOMEZO_FALLBACK_URL)
+            }
             val antiDpiContent = fetchWithFallback("domains_antidpi.txt")
             val strategiesContent = fetchWithFallback("strategies.txt")
 

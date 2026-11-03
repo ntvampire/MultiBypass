@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-MultiBypass Anti-DPI Domain Lists & TCP Desync Strategies Pipeline.
+MultiBypass Anti-DPI Domain Lists, TCP Desync Strategies & SmartHosts Pipeline.
 Fetches, cleans, deduplicates mobile-first domain lists for Anti-DPI (ByeByeDPI),
-orders TCP desynchronization strategies from simple to complex with default #1,
+sanitizes SmartHosts geoblock mappings (excluding 4PDA, suggestqueries, Google Sign-in and domestic services),
+orders TCP desynchronization strategies with modern default #1,
 and mirrors configurations for GitHub Pages distribution and app assets.
 
-Runs via GitHub Actions on weekly schedule and publishes to GitHub Pages (docs/).
+Runs via GitHub Actions on daily schedule and publishes to GitHub Pages (docs/).
 """
 
 import hashlib
@@ -29,13 +30,15 @@ SEEDS_STRATEGIES_FILE = SEEDS_DIR / "seeds_strategies.txt"
 
 OUT_ANTIDPI_DOCS = DOCS_DIR / "domains_antidpi.txt"
 OUT_STRATEGIES_DOCS = DOCS_DIR / "strategies.txt"
+OUT_SMARTHOSTS_DOCS = DOCS_DIR / "smart-no-crutch.hosts"
 OUT_VERSION_DOCS = DOCS_DIR / "domains_version.json"
 
 OUT_ANTIDPI_ASSETS = ASSETS_DIR / "domains_antidpi.txt"
 OUT_STRATEGIES_ASSETS = ASSETS_DIR / "strategies.txt"
 OUT_STRATEGIES_LIST_ASSETS = ASSETS_DIR / "proxytest_strategies.list"
+OUT_SMARTHOSTS_ASSETS = ASSETS_DIR / "smart-no-crutch.hosts"
 
-DEFAULT_STRATEGY = "-o1 -r-5+se -a1"
+DEFAULT_STRATEGY = "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c"
 
 # External upstream sources
 UPSTREAM_ANTIDPI_URLS = [
@@ -44,6 +47,14 @@ UPSTREAM_ANTIDPI_URLS = [
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/lists/list-google.txt",
 ]
 
+UPSTREAM_SMARTHOSTS_URL = "https://raw.githubusercontent.com/Noktomezo/RussiaFancyLists/main/lists/hosts/smart-no-crutch.hosts"
+
+# Specific domains to exclude from SmartHosts to prevent conflicts or service breakages
+SMARTHOSTS_EXCLUDED_DOMAINS = {
+    "apis.google.com",           # Breaks Google Sign-In (OAuth) on mobile apps
+    "suggestqueries.google.com",  # Causes search autocomplete latency in YouTube/browser
+}
+
 # Hard-exclusion blacklist (no desktop ballast, no torrents, no casinos)
 JUNK_PATTERN = re.compile(
     r"(torrent|tracker|rutor|rutracker|nnmclub|kinozal|flibusta|rezka|lostfilm|"
@@ -51,7 +62,7 @@ JUNK_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# Domestic Russian/Belarus services and banking to NEVER touch or desync
+# Domestic Russian/Belarus services and banking to NEVER touch, proxy or desync
 DOMESTIC_PATTERN = re.compile(
     r"(\.(ru|su|by|xn--p1ai)$|"
     r"(^|\.)(gosuslugi|sber|sberbank|tbank|tinkoff|alfabank|vtb|raiffeisen|"
@@ -63,12 +74,16 @@ DOMAIN_VALIDATOR = re.compile(
     r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$"
 )
 
+IPV4_REGEX = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+)
 
-def fetch_url(url: str, timeout: int = 10) -> str:
+
+def fetch_url(url: str, timeout: int = 12) -> str:
     """Fetch text content from a remote URL with error handling."""
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "MultiBypass-Updater/2.0 (+https://github.com/ntvampire/MultiBypass)"}
+        headers={"User-Agent": "MultiBypass-Updater/3.0 (+https://github.com/ntvampire/MultiBypass)"}
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -170,17 +185,77 @@ def process_strategies() -> list[str]:
     return strategies
 
 
+def is_smarthosts_excluded(domain: str) -> bool:
+    """Check if domain should be stripped from SmartHosts SNI relay."""
+    d = domain.strip().lower().rstrip(".")
+    if not d:
+        return True
+    if "4pda" in d:
+        return True
+    if d in SMARTHOSTS_EXCLUDED_DOMAINS:
+        return True
+    return False
+
+
+def process_smarthosts() -> tuple[str, int]:
+    """Fetch, sanitize and format SmartHosts geoblock mapping."""
+    print(f"Fetching upstream SmartHosts: {UPSTREAM_SMARTHOSTS_URL}")
+    raw_content = fetch_url(UPSTREAM_SMARTHOSTS_URL, timeout=15)
+    if not raw_content and OUT_SMARTHOSTS_ASSETS.exists():
+        print("[WARN] Failed to fetch upstream SmartHosts, using local assets fallback.")
+        with open(OUT_SMARTHOSTS_ASSETS, "r", encoding="utf-8") as f:
+            raw_content = f.read()
+
+    if not raw_content:
+        print("[ERROR] SmartHosts content is empty!", file=sys.stderr)
+        return "", 0
+
+    unique_domains = set()
+    cleaned_lines = [
+        "# MultiBypass - SmartHosts Geoblock SNI-Relay Map",
+        "# Processed and sanitized: 4PDA, Google Sign-In, suggestqueries and RU/BY domains excluded.",
+        ""
+    ]
+
+    for line in raw_content.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+
+        tokens = s.split()
+        if len(tokens) < 2:
+            continue
+
+        ip = tokens[0].strip()
+        if not IPV4_REGEX.match(ip) or ip in ("127.0.0.1", "0.0.0.0"):
+            continue
+
+        valid_domains = []
+        for dom in tokens[1:]:
+            cdom = clean_domain(dom)
+            if cdom and not is_smarthosts_excluded(cdom):
+                valid_domains.append(cdom)
+                unique_domains.add(cdom)
+
+        if valid_domains:
+            cleaned_lines.append(f"{ip} {' '.join(sorted(valid_domains))}")
+
+    result_text = "\n".join(cleaned_lines) + "\n"
+    return result_text, len(unique_domains)
+
+
 def main():
     print("=== MultiBypass Lists & Strategies Pipeline ===")
 
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Process domain lists and strategies
+    # 1. Process domain lists, strategies and SmartHosts
     antidpi_list = process_antidpi_domains()
     strategies_list = process_strategies()
+    smarthosts_text, smarthosts_count = process_smarthosts()
 
-    if not antidpi_list or not strategies_list:
+    if not antidpi_list or not strategies_list or not smarthosts_text:
         print("[ERROR] One of the lists is empty! Aborting update to protect database.", file=sys.stderr)
         sys.exit(1)
 
@@ -193,12 +268,13 @@ def main():
 
     strategies_text = (
         "# MultiBypass - Пресеты десинхронизации TCP (ByeByeDPI)\n"
-        "# Отсортированы от простых к сложным. Стратегия по умолчанию (#1) зафиксирована на позиции 1.\n"
+        "# Проверенные стратегии обхода ТСПУ для YouTube, Discord и веб-сервисов\n"
         + "\n".join(strategies_list) + "\n"
     )
 
     antidpi_hash = compute_sha256(antidpi_text)
     strategies_hash = compute_sha256(strategies_text)
+    smarthosts_hash = compute_sha256(smarthosts_text)
 
     # 3. Read previous version metadata
     prev_version = 0
@@ -225,6 +301,11 @@ def main():
             "count": len(strategies_list),
             "sha256": strategies_hash,
             "filename": "strategies.txt"
+        },
+        "smarthosts": {
+            "count": smarthosts_count,
+            "sha256": smarthosts_hash,
+            "filename": "smart-no-crutch.hosts"
         }
     }
 
@@ -234,6 +315,9 @@ def main():
 
     with open(OUT_STRATEGIES_DOCS, "w", encoding="utf-8", newline="\n") as f:
         f.write(strategies_text)
+
+    with open(OUT_SMARTHOSTS_DOCS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(smarthosts_text)
 
     with open(OUT_VERSION_DOCS, "w", encoding="utf-8", newline="\n") as f:
         json.dump(version_metadata, f, indent=2, ensure_ascii=False)
@@ -249,9 +333,13 @@ def main():
     with open(OUT_STRATEGIES_LIST_ASSETS, "w", encoding="utf-8", newline="\n") as f:
         f.write(strategies_text)
 
+    with open(OUT_SMARTHOSTS_ASSETS, "w", encoding="utf-8", newline="\n") as f:
+        f.write(smarthosts_text)
+
     print(f"[SUCCESS] Updated:")
     print(f"  - AntiDPI: {len(antidpi_list)} domains (SHA256: {antidpi_hash[:10]}...)")
-    print(f"  - Strategies: {len(strategies_list)} presets (Default #1: {DEFAULT_STRATEGY})")
+    print(f"  - Strategies: {len(strategies_list)} presets (Default #1: {DEFAULT_STRATEGY[:30]}...)")
+    print(f"  - SmartHosts: {smarthosts_count} geoblock domains (SHA256: {smarthosts_hash[:10]}...)")
     print(f"  - Version: {new_version} ({now_iso})")
 
 
