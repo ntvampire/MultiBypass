@@ -29,28 +29,35 @@ import java.util.concurrent.TimeUnit
 
 object PresetStrategies {
     val defaultList = listOf(
-        "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c",
-        "-r1+s -a1",
-        "-r1+s -s1+s -a1",
-        "-r1+s -d1+s -a1",
-        "-r1+s -s2+s -d3+s -a1",
-        "-n google.com -f-1 -r1+s -a1",
-        "-n google.com -f-1 -t8 -s1+s -a1",
-        "-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1",
-        "-d1 -d3+s -s6+s -d9+s -s20+s -d25+s -s30+s -a1",
-        "-s4+s -r9+s -Qr -n google.com -S -a1",
-        "-q1 -r1+s -s2+s -a1",
-        "-o1 -a1 -At,r,s,c -r1+s -f-1 -t6 -a1",
-        "-s1 -d3+s -a1 -At,r,s,c -r1+s -a1",
-        "-f-1 -t8 -n google.com -s1+s -a1",
-        "-f1+nm -t6 -a1 -At,r,s,c -n google.com -Qr -s1:6+sm -a1 -At,r,s,c -s5:12+sm -a1",
-        "-d1 -s1+s -r1+s -f-1 -t8 -a1",
-        "-q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1",
-        "-o1 -d1 -r1+s -S -s1+s -d3+s -a1",
-        "-f-200 -Qr -s3:5+sm -a1 -At,r,s,c -d1 -s4+sm -s8+s -f-300 -d6+s -a1",
-        "-d1 -s3+s -a1",
-        "-o1+s -d3+s -a1",
-        "-o1 -r-5+se -a1"
+        "-f -1 -t 8 -n google.com -s 1+s",
+        "-f -1 -t 7 -n google.com -s 1+s",
+        "-f -1 -t 6 -n google.com -s 1+s",
+        "-f -1 -t 5 -n google.com -s 1+s",
+        "-f -1 -t 4 -n google.com -s 1+s",
+        "-f -1 -t 9 -n google.com -s 1+s",
+        "-f -1 -t 10 -n google.com -s 1+s",
+        "-f -1 -t 8 -n google.com -s 2+s",
+        "-f -1 -t 6 -n google.com -s 2+s",
+        "-r 1+s -f -1 -t 8 -n google.com -s 1+s",
+        "-r 1+s -f -1 -t 6 -n google.com -s 1+s",
+        "-r 1+s -f -1 -t 8 -n google.com",
+        "-r 1+s -f -1 -t 6 -n google.com",
+        "-r 1+s -f -1 -t 4 -n google.com",
+        "-s 1+s -a 1",
+        "-s 2+s -a 1",
+        "-s 1 -s 1+s -a 1",
+        "-s 1 -s 2+s -a 1",
+        "-s 1+s -s 3+s -a 1",
+        "-r 1+s -a 1",
+        "-r 1+s -s 1+s -a 1",
+        "-r 1+s -s 2+s -a 1",
+        "-o 1 -s 1+s -a 1",
+        "-o 1+s -s 2+s -a 1",
+        "-o 1 -r 1+s -s 1+s -a 1",
+        "-o 1 -f -1 -t 8 -n google.com -s 1+s -a 1",
+        "-o 1 -f -1 -t 6 -n google.com -s 1+s -a 1",
+        "-d 1+s -s 2+s -a 1",
+        "-r 1+s -d 1+s -a 1"
     )
 
     val defaultTestTargets = listOf(
@@ -124,8 +131,9 @@ class StrategyTester private constructor(private val context: Context) {
     private val httpClient by lazy {
         OkHttpClient.Builder()
             .proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", TEST_PORT)))
-            .connectTimeout(3, TimeUnit.SECONDS)
-            .readTimeout(3, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .callTimeout(7, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
             .build()
     }
@@ -180,7 +188,17 @@ class StrategyTester private constructor(private val context: Context) {
 
                     updateProgressNotification(index + 1, strategies.size, bestResult?.latencyMs)
 
-                    val result = testSingleStrategy(strategy, targets)
+                    val result = withTimeoutOrNull(25000L) {
+                        testSingleStrategy(strategy, targets)
+                    } ?: StrategyTestResult(
+                        strategy = strategy,
+                        isWorking = false,
+                        latencyMs = 9999L,
+                        testedSitesCount = targets.size,
+                        successfulSitesCount = 0,
+                        workingServices = emptyList(),
+                        serviceLatencies = emptyMap()
+                    )
                     results.add(result)
                     val sorted = results.sortedWith(
                         compareByDescending<StrategyTestResult> { it.isWorking }
@@ -284,8 +302,10 @@ class StrategyTester private constructor(private val context: Context) {
             )
         }
 
-        delay(350)
-        httpClient.connectionPool.evictAll()
+        delay(400)
+        try {
+            httpClient.connectionPool.evictAll()
+        } catch (_: Throwable) {}
 
         var successCount = 0
         var totalLatency = 0L
@@ -301,15 +321,15 @@ class StrategyTester private constructor(private val context: Context) {
                     .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
                     .header("Accept", "*/*")
                     .build()
-                val response = httpClient.newCall(request).execute()
-                if (response.isSuccessful || response.code in 200..499) {
-                    val lat = System.currentTimeMillis() - startTime
-                    totalLatency += lat
-                    successCount++
-                    workingServices.add(target.name)
-                    serviceLatencies[target.name] = lat
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful || response.code in 200..499) {
+                        val lat = System.currentTimeMillis() - startTime
+                        totalLatency += lat
+                        successCount++
+                        workingServices.add(target.name)
+                        serviceLatencies[target.name] = lat
+                    }
                 }
-                response.close()
             } catch (_: Throwable) {}
         }
 

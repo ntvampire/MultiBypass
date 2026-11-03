@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 11
+        private const val CURRENT_DOMAINS_VERSION = 12
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -77,7 +77,13 @@ class SettingsRepository(private val context: Context) {
             val defaultAntiDpi = AntiDpiGroupConfig()
             val currentAntiDpi = _antiDpiConfig.value
             val mergedAntiDpiDomains = (defaultAntiDpi.domains + currentAntiDpi.domains).distinct()
-            val rawStrategy = if (currentAntiDpi.strategy == "-f -1 -e 1 -q 1" || currentAntiDpi.strategy == "-o1 -r-5+se -a1" || currentAntiDpi.strategy.isBlank() || currentAntiDpi.strategy.contains("{sni}")) {
+            val isLegacyOrBroken = currentAntiDpi.strategy == "-f -1 -e 1 -q 1" ||
+                currentAntiDpi.strategy == "-o1 -r-5+se -a1" ||
+                currentAntiDpi.strategy.isBlank() ||
+                currentAntiDpi.strategy.contains("{sni}") ||
+                currentAntiDpi.strategy.startsWith("--tlsrec 1+s --disorder 1") ||
+                currentAntiDpi.strategy.contains("-d1 -s1+s -d3+s")
+            val rawStrategy = if (isLegacyOrBroken) {
                 defaultAntiDpi.strategy
             } else {
                 currentAntiDpi.strategy

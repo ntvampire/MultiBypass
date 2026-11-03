@@ -44,7 +44,7 @@ object ByeDpiController {
         }
     }
 
-    suspend fun start(strategy: String = "--tlsrec 1+s --disorder 1 --split 2 --fake-sni google.com --fake-tls-mod orig --drop-sack --auto t,r,s,c", port: Int = DEFAULT_PORT) {
+    suspend fun start(strategy: String = "-f -1 -t 8 -n google.com -s 1+s", port: Int = DEFAULT_PORT) {
         lock.withLock {
             stopLocked()
             delay(150)
@@ -55,7 +55,7 @@ object ByeDpiController {
                 strategy
             }
 
-            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy --auto=none" else " $sanitizedStrategy"
+            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy" else " $sanitizedStrategy"
             val fullCmd = "ciadpi -i 127.0.0.1 -p $port$hostsArg"
             val args = parseArgs(fullCmd)
 
@@ -85,7 +85,18 @@ object ByeDpiController {
         try {
             ByeDpiProxy.jniStopProxy()
             proxyJob?.cancel()
-            proxyJob?.join()
+            val cleanExit = withTimeoutOrNull(600L) {
+                proxyJob?.join()
+                true
+            }
+            if (cleanExit == null) {
+                Log.w(TAG, "Proxy job did not terminate cleanly within 600ms, forcing native close")
+                try {
+                    ByeDpiProxy.jniForceClose()
+                } catch (fe: Exception) {
+                    Log.e(TAG, "jniForceClose error", fe)
+                }
+            }
             proxyJob = null
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping ByeByeDPI", e)
