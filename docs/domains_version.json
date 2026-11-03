@@ -1,14 +1,14 @@
 {
-  "version": 12,
-  "updated_at": "2026-11-03T10:19:23Z",
+  "version": 13,
+  "updated_at": "2026-11-03T11:43:57Z",
   "antidpi": {
     "count": 66,
     "sha256": "dedbd65f9e84811fa8b9594097ea51693a54b89054e343ec40c522cbd6d56c27",
     "filename": "domains_antidpi.txt"
   },
   "strategies": {
-    "count": 29,
-    "sha256": "6398d9ebeaad640e952dfbdaaa780cea63b13635199da4da255c125950dd8605",
+    "count": 60,
+    "sha256": "263078c29b9f912bbf57defbde6b371eeb778b220421d04dbacf87e9ce2655d4",
     "filename": "strategies.txt"
   },
   "smarthosts": {

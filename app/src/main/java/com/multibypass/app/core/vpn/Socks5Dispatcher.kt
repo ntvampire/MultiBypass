@@ -288,13 +288,7 @@ object Socks5Dispatcher {
                             continue
                         }
 
-                        // 2. Блокировка QUIC (UDP 443): мгновенный сброс, заставляющий YouTube и браузеры
-                        // сразу переключиться на TCP (HTTP/2), где работает десинхронизация ByeByeDPI.
-                        if (uPort == 443) {
-                            continue
-                        }
-
-                        // 3. Обычный UDP-трафик (STUN, VoIP, игры): асинхронная передача через защищенный сокет
+                        // 2. Обычный UDP-трафик (QUIC / HTTP/3 для медиа-стриминга, STUN, VoIP, игры): асинхронная передача через защищенный сокет
                         val targetClientAddr = clientUdpAddr
                         val replyHdr = data.copyOfRange(0, headerOffset)
                         scope.launch {

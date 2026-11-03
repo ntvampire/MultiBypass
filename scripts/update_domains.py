@@ -38,7 +38,7 @@ OUT_STRATEGIES_ASSETS = ASSETS_DIR / "strategies.txt"
 OUT_STRATEGIES_LIST_ASSETS = ASSETS_DIR / "proxytest_strategies.list"
 OUT_SMARTHOSTS_ASSETS = ASSETS_DIR / "smart-no-crutch.hosts"
 
-DEFAULT_STRATEGY = "-f -1 -t 8 -n google.com -s 1+s"
+DEFAULT_STRATEGY = "-s1 -d3+s -a1 -At -r1+s -a1"
 
 # External upstream sources
 UPSTREAM_ANTIDPI_URLS = [

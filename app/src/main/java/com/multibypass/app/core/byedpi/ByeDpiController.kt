@@ -44,7 +44,11 @@ object ByeDpiController {
         }
     }
 
-    suspend fun start(strategy: String = "-f -1 -t 8 -n google.com -s 1+s", port: Int = DEFAULT_PORT) {
+    suspend fun start(
+        strategy: String = "-s1 -d3+s -a1 -At -r1+s -a1",
+        port: Int = DEFAULT_PORT,
+        useHosts: Boolean = true
+    ) {
         lock.withLock {
             stopLocked()
             delay(150)
@@ -55,7 +59,7 @@ object ByeDpiController {
                 strategy
             }
 
-            val hostsArg = if (!hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy" else " $sanitizedStrategy"
+            val hostsArg = if (useHosts && !hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy" else " $sanitizedStrategy"
             val fullCmd = "ciadpi -i 127.0.0.1 -p $port$hostsArg"
             val args = parseArgs(fullCmd)
 
