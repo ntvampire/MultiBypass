@@ -84,7 +84,6 @@ val GEOBLOCK_PACKAGES = setOf(
     "com.openai.chatgpt",
     "com.google.android.apps.bard",
     "com.google.android.googlequicksearchbox",
-    "com.google.android.gms",
     "ai.anthropic.claudeforandroid",
     "ai.perplexity.app.android",
     "com.spotify.music",

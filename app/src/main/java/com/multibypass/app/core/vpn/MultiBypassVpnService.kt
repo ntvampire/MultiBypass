@@ -409,6 +409,9 @@ class MultiBypassVpnService : VpnService() {
                 builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("192.168.0.0"), 16))
                 builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("172.16.0.0"), 12))
                 builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("169.254.0.0"), 16))
+                try {
+                    builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("224.0.0.0"), 4))
+                } catch (_: Exception) {}
             } catch (e: Exception) {
                 Log.w(TAG, "excludeRoute failed, falling back to 0.0.0.0/0", e)
             }

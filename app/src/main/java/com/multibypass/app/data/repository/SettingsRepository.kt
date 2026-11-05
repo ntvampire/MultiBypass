@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 13
+        private const val CURRENT_DOMAINS_VERSION = 14
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -103,8 +103,8 @@ class SettingsRepository(private val context: Context) {
             updateAntiDpiConfig(newAntiDpi)
 
             val currentRouted = _routedApps.value.toMutableList()
-            if (currentRouted.contains("com.google.android.apps.bard") && !currentRouted.contains("com.google.android.gms")) {
-                currentRouted.add("com.google.android.gms")
+            if (currentRouted.contains("com.google.android.gms")) {
+                currentRouted.remove("com.google.android.gms")
                 updateRoutedApps(currentRouted.distinct())
             }
 

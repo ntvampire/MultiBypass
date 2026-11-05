@@ -250,16 +250,12 @@ fun AppPickerBottomSheet(
                                             currentSelected.remove(app.packageName)
                                             if (app.packageName == "com.google.android.apps.bard") {
                                                 currentSelected.remove("com.google.android.googlequicksearchbox")
-                                                currentSelected.remove("com.google.android.gms")
                                             }
                                         } else {
                                             currentSelected.add(app.packageName)
                                             if (app.packageName == "com.google.android.apps.bard") {
                                                 if (geoblockApps.any { it.packageName == "com.google.android.googlequicksearchbox" }) {
                                                     currentSelected.add("com.google.android.googlequicksearchbox")
-                                                }
-                                                if (geoblockApps.any { it.packageName == "com.google.android.gms" }) {
-                                                    currentSelected.add("com.google.android.gms")
                                                 }
                                             }
                                         }
@@ -451,7 +447,7 @@ private fun AppPickerRow(
             )
             val subtext = when (app.packageName) {
                 "com.google.android.googlequicksearchbox" -> "Службы Google и бэкенд Gemini"
-                "com.google.android.gms" -> "Службы Google Play (авторизация Gemini)"
+                "com.google.android.gms" -> "Службы Google Play (включать осторожно: влияет на IoT/принтеры)"
                 "com.google.android.apps.bard" -> "Клиент Google Gemini"
                 else -> app.packageName
             }
