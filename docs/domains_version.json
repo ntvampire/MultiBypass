@@ -1,6 +1,6 @@
 {
-  "version": 29,
-  "updated_at": "2026-11-19T13:48:06Z",
+  "version": 30,
+  "updated_at": "2026-11-20T13:30:18Z",
   "antidpi": {
     "count": 66,
     "sha256": "dedbd65f9e84811fa8b9594097ea51693a54b89054e343ec40c522cbd6d56c27",
@@ -13,7 +13,7 @@
   },
   "smarthosts": {
     "count": 473,
-    "sha256": "5d8a926cbcffffb60255ba1d2bb47d881ba65b8dd64f42ed6bf9fafd0b4e6579",
+    "sha256": "a6b4ad2eb3933a8661d0133ce0d10bfac7e9daf70f876f074765210e827bf0f3",
     "filename": "smart-no-crutch.hosts"
   }
 }
