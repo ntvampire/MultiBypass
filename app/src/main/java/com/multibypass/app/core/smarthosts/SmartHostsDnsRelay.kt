@@ -22,9 +22,45 @@ object SmartHostsDnsRelay {
     private const val TAG = "SmartHostsDnsRelay"
     private const val FALLBACK_DNS_IP = "77.88.8.8" // Yandex DNS fallback
     private const val DNS_TIMEOUT_MS = 2500
+    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "1.1.1.1", "9.9.9.9")
 
     @Volatile
     private var cachedUpstreamDns: String? = null
+
+    @Volatile
+    private var antiDpiDomainsCache: Set<String>? = null
+
+    fun clearAntiDpiCache() {
+        antiDpiDomainsCache = null
+    }
+
+    private fun getAntiDpiDomains(context: Context): Set<String> {
+        antiDpiDomainsCache?.let { return it }
+        val set = try {
+            val srcFile = java.io.File(context.filesDir, "domains_antidpi_clean.txt")
+            val content = if (srcFile.exists() && srcFile.length() > 0) {
+                srcFile.readText()
+            } else {
+                val orig = java.io.File(context.filesDir, "domains_antidpi.txt")
+                if (orig.exists() && orig.length() > 0) orig.readText()
+                else context.assets.open("domains_antidpi.txt").bufferedReader().use { it.readText() }
+            }
+            content.lines()
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() && !it.startsWith("#") }
+                .toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+        antiDpiDomainsCache = set
+        return set
+    }
+
+    fun isAntiDpiDomain(context: Context, domain: String): Boolean {
+        val q = domain.trim().lowercase().removeSuffix(".")
+        val set = getAntiDpiDomains(context)
+        return set.any { q == it || q.endsWith(".$it") }
+    }
 
     fun refreshUpstreamDns(context: Context) {
         cachedUpstreamDns = null
@@ -58,10 +94,56 @@ object SmartHostsDnsRelay {
                     return DnsPacketCodec.buildNoDataResponse(parsed)
                 }
             }
+
+            // 2. Check if domain is in Anti-DPI list (YouTube CDN, Instagram CDN, etc.)
+            // Carriers frequently poison DNS for these domains (returning 0.0.0.0 or 127.0.0.1).
+            // Query clean public DNS (8.8.8.8, 1.1.1.1) to obtain the real IP for ByeDPI.
+            if (isAntiDpiDomain(context, parsed.qname)) {
+                val cleanResponse = queryCleanDns(queryData, queryLength)
+                if (cleanResponse != null) {
+                    return cleanResponse
+                }
+            }
         }
 
-        // 2. Domain not in SmartHosts (or non-A query): forward to upstream system DNS
-        return forwardToUpstreamDns(context, queryData, queryLength)
+        // 3. Domain not in SmartHosts/AntiDPI: forward to upstream system DNS
+        val resp = forwardToUpstreamDns(context, queryData, queryLength)
+        if (resp != null) {
+            return resp
+        }
+
+        // Fallback to clean DNS if operator DNS is unreachable/times out
+        return queryCleanDns(queryData, queryLength)
+    }
+
+    /**
+     * Queries unpoisoned public DNS servers via protected socket.
+     */
+    private fun queryCleanDns(queryData: ByteArray, queryLength: Int): ByteArray? {
+        for (dnsIp in CLEAN_DNS_IPS) {
+            var socket: DatagramSocket? = null
+            try {
+                socket = DatagramSocket()
+                MultiBypassVpnService.protectSocket(socket)
+                socket.soTimeout = 2000
+                val targetAddr = InetAddress.getByName(dnsIp)
+                val sendPacket = DatagramPacket(queryData, 0, queryLength, targetAddr, 53)
+                socket.send(sendPacket)
+
+                val recvBuf = ByteArray(1500)
+                val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
+                socket.receive(recvPacket)
+
+                val response = ByteArray(recvPacket.length)
+                System.arraycopy(recvBuf, 0, response, 0, recvPacket.length)
+                return response
+            } catch (_: Exception) {
+                // Try next clean DNS server
+            } finally {
+                try { socket?.close() } catch (_: Exception) {}
+            }
+        }
+        return null
     }
 
     /**

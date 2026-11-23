@@ -236,7 +236,11 @@ class SettingsRepository(private val context: Context) {
     private fun loadAntiDpiConfig(): AntiDpiGroupConfig {
         val json = prefs.getString(KEY_ANTIDPI_CONFIG, null) ?: return AntiDpiGroupConfig()
         return try {
-            gson.fromJson(json, AntiDpiGroupConfig::class.java) ?: AntiDpiGroupConfig()
+            val parsed = gson.fromJson(json, AntiDpiGroupConfig::class.java) ?: AntiDpiGroupConfig()
+            parsed.copy(
+                strategy = if (parsed.strategy.isBlank()) "-s1 -f-1 -t5 -a1" else parsed.strategy,
+                instagramStrategy = if (parsed.instagramStrategy.isNullOrBlank()) "-s2 -a1" else parsed.instagramStrategy
+            )
         } catch (_: Exception) {
             AntiDpiGroupConfig()
         }

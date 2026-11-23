@@ -144,7 +144,12 @@ object ServiceWatchdog {
             if (!isPortListening("127.0.0.1", byeDpiPort, PROBE_TIMEOUT_MS) && !isTesting) {
                 Log.w(TAG, "Watchdog ($source): ByeByeDPI on port $byeDpiPort is not responding after retry. Restarting...")
                 val antiDpiConfig = repository.antiDpiConfig.value
-                ByeDpiController.start(strategy = antiDpiConfig.strategy, port = byeDpiPort)
+                ByeDpiController.start(
+                    strategy = antiDpiConfig.strategy,
+                    instagramStrategy = antiDpiConfig.instagramStrategy,
+                    separateProfiles = antiDpiConfig.separateProfiles,
+                    port = byeDpiPort
+                )
             }
         }
     }

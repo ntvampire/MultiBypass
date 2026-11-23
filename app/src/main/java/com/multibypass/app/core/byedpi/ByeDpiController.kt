@@ -16,6 +16,24 @@ object ByeDpiController {
     @Volatile
     var hostsFilePath: String? = null
 
+    @Volatile
+    var metaHostsFilePath: String? = null
+
+    @Volatile
+    var generalHostsFilePath: String? = null
+
+    val META_DOMAINS = setOf(
+        "instagram.com",
+        "cdninstagram.com",
+        "i.instagram.com",
+        "graph.instagram.com",
+        "gateway.instagram.com",
+        "facebook.com",
+        "fbcdn.net",
+        "threads.net",
+        "meta.com"
+    )
+
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
@@ -25,6 +43,9 @@ object ByeDpiController {
     fun ensureHostsFile(context: android.content.Context): String? {
         return try {
             val targetFile = java.io.File(context.filesDir, "domains_antidpi_clean.txt")
+            val metaFile = java.io.File(context.filesDir, "domains_antidpi_meta.txt")
+            val generalFile = java.io.File(context.filesDir, "domains_antidpi_general.txt")
+
             val srcFile = java.io.File(context.filesDir, "domains_antidpi.txt")
             val content = if (srcFile.exists() && srcFile.length() > 0) {
                 srcFile.readText()
@@ -34,9 +55,23 @@ object ByeDpiController {
             val cleanDomains = content.lines()
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() && !it.startsWith("#") }
+
             targetFile.writeText(cleanDomains.joinToString("\n"))
             hostsFilePath = targetFile.absolutePath
-            Log.i(TAG, "Prepared clean anti-DPI hosts file: ${targetFile.absolutePath} (${cleanDomains.size} domains)")
+
+            val metaDomains = cleanDomains.filter { domain ->
+                META_DOMAINS.any { domain == it || domain.endsWith(".$it") }
+            }
+            metaFile.writeText(metaDomains.joinToString("\n"))
+            metaHostsFilePath = metaFile.absolutePath
+
+            val generalDomains = cleanDomains.filter { domain ->
+                !META_DOMAINS.any { domain == it || domain.endsWith(".$it") }
+            }
+            generalFile.writeText(generalDomains.joinToString("\n"))
+            generalHostsFilePath = generalFile.absolutePath
+
+            Log.i(TAG, "Prepared anti-DPI hosts: total=${cleanDomains.size}, meta=${metaDomains.size}, general=${generalDomains.size}")
             targetFile.absolutePath
         } catch (e: Exception) {
             Log.e(TAG, "Failed to prepare hosts file", e)
@@ -45,7 +80,9 @@ object ByeDpiController {
     }
 
     suspend fun start(
-        strategy: String = "-s1 -d3+s -a1 -At -r1+s -a1",
+        strategy: String = "-s1 -f-1 -t5 -a1",
+        instagramStrategy: String = "-s2 -a1",
+        separateProfiles: Boolean = true,
         port: Int = DEFAULT_PORT,
         useHosts: Boolean = true
     ) {
@@ -53,14 +90,27 @@ object ByeDpiController {
             stopLocked()
             delay(150)
 
-            val sanitizedStrategy = if (strategy.contains("{sni}")) {
-                strategy.replace("{sni}", "www.google.com")
-            } else {
-                strategy
+            fun sanitize(s: String): String {
+                val trimmed = s.trim()
+                return if (trimmed.contains("{sni}")) {
+                    trimmed.replace("{sni}", "www.google.com")
+                } else {
+                    trimmed
+                }
             }
 
-            val hostsArg = if (useHosts && !hostsFilePath.isNullOrBlank()) " --hosts \"$hostsFilePath\" $sanitizedStrategy" else " $sanitizedStrategy"
-            val fullCmd = "ciadpi -i 127.0.0.1 -p $port$hostsArg"
+            val fullCmd = if (useHosts && separateProfiles && !metaHostsFilePath.isNullOrBlank() && !generalHostsFilePath.isNullOrBlank()) {
+                val sMeta = sanitize(instagramStrategy)
+                val sGeneral = sanitize(strategy)
+                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$metaHostsFilePath\" $sMeta -A --hosts \"$generalHostsFilePath\" $sGeneral"
+            } else if (useHosts && !hostsFilePath.isNullOrBlank()) {
+                val s = sanitize(strategy)
+                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$hostsFilePath\" $s"
+            } else {
+                val s = sanitize(strategy)
+                "ciadpi -i 127.0.0.1 -p $port -J $s"
+            }
+
             val args = parseArgs(fullCmd)
 
             proxyJob = CoroutineScope(Dispatchers.IO).launch {

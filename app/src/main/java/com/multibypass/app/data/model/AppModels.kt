@@ -7,7 +7,9 @@ data class SmartHostsConfig(
 )
 
 data class AntiDpiGroupConfig(
-    val strategy: String = "-s1 -d3+s -a1 -At -r1+s -a1",
+    val strategy: String = "-s1 -f-1 -t5 -a1",
+    val instagramStrategy: String = "-s2 -a1",
+    val separateProfiles: Boolean = true,
     val domains: List<String> = listOf(
         "youtube.com",
         "youtu.be",

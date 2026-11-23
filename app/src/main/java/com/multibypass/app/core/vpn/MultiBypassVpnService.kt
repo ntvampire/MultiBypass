@@ -139,7 +139,12 @@ class MultiBypassVpnService : VpnService() {
 
                 // 1. Start ByeByeDPI daemon on port 1080 with clean anti-DPI hosts whitelist
                 ByeDpiController.ensureHostsFile(applicationContext)
-                ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
+                ByeDpiController.start(
+                    strategy = antiDpiConfig.strategy,
+                    instagramStrategy = antiDpiConfig.instagramStrategy,
+                    separateProfiles = antiDpiConfig.separateProfiles,
+                    port = ByeDpiController.DEFAULT_PORT
+                )
                 delay(400)
                 try {
                     ByeDpiProxy.setDnsRedirectPort(0)
@@ -291,7 +296,12 @@ class MultiBypassVpnService : VpnService() {
                     ByeDpiController.stop()
                     delay(250)
                     ByeDpiController.ensureHostsFile(applicationContext)
-                    ByeDpiController.start(strategy = antiDpiConfig.strategy, port = ByeDpiController.DEFAULT_PORT)
+                    ByeDpiController.start(
+                        strategy = antiDpiConfig.strategy,
+                        instagramStrategy = antiDpiConfig.instagramStrategy,
+                        separateProfiles = antiDpiConfig.separateProfiles,
+                        port = ByeDpiController.DEFAULT_PORT
+                    )
                     delay(250)
                     try {
                         ByeDpiProxy.setDnsRedirectPort(0)

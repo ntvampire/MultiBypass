@@ -59,6 +59,7 @@ fun AntiDpiGroupScreen(
 
     var newDomainInput by remember { mutableStateOf("") }
     var showStrategyDialog by remember { mutableStateOf(false) }
+    var presetTargetIsInstagram by remember { mutableStateOf(false) }
 
     var presetStrategies by remember { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(showStrategyDialog) {
@@ -97,43 +98,88 @@ fun AntiDpiGroupScreen(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Текущая стратегия ByeByeDPI:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("YouTube, Discord и общие сервисы:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = antiDpiConfig.strategy,
-                        onValueChange = { repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = it)) },
+                        onValueChange = {
+                            val newCfg = antiDpiConfig.copy(strategy = it)
+                            repository.updateAntiDpiConfig(newCfg)
+                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                scope.launch {
+                                    ByeDpiController.start(
+                                        strategy = newCfg.strategy,
+                                        instagramStrategy = newCfg.instagramStrategy,
+                                        separateProfiles = newCfg.separateProfiles
+                                    )
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Text("Instagram и Meta (без disorder):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = antiDpiConfig.instagramStrategy,
+                        onValueChange = {
+                            val newCfg = antiDpiConfig.copy(instagramStrategy = it)
+                            repository.updateAntiDpiConfig(newCfg)
+                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                scope.launch {
+                                    ByeDpiController.start(
+                                        strategy = newCfg.strategy,
+                                        instagramStrategy = newCfg.instagramStrategy,
+                                        separateProfiles = newCfg.separateProfiles
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { showStrategyDialog = true },
+                            onClick = {
+                                presetTargetIsInstagram = false
+                                showStrategyDialog = true
+                            },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Пресеты")
+                            Text("Пресеты YT", fontSize = 12.sp)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                presetTargetIsInstagram = true
+                                showStrategyDialog = true
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Пресеты IG", fontSize = 12.sp)
+                        }
                         Button(
                             onClick = onNavigateToAutoStrategy,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1.2f),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
                         ) {
-                            Icon(Icons.Default.AutoMode, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Автоподбор")
+                            Icon(Icons.Default.AutoMode, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Подбор", fontSize = 12.sp)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "💡 Автоподбор поочередно тестирует параметры десинхронизации на YouTube, Instagram и X (Twitter) для поиска оптимального соединения.",
+                        text = "💡 Используются раздельные профили десинхронизации: фейк-пакеты для YouTube/Discord и деликатный сплит без disorder для Instagram Stories.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -285,7 +331,11 @@ fun AntiDpiGroupScreen(
                                     repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = best.strategy))
                                     if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
                                         scope.launch {
-                                            ByeDpiController.start(strategy = best.strategy)
+                                            ByeDpiController.start(
+                                                strategy = best.strategy,
+                                                instagramStrategy = antiDpiConfig.instagramStrategy,
+                                                separateProfiles = antiDpiConfig.separateProfiles
+                                            )
                                         }
                                     }
                                 },
@@ -411,9 +461,10 @@ fun AntiDpiGroupScreen(
 
     // Strategy Picker Dialog
     if (showStrategyDialog) {
+        val targetTitle = if (presetTargetIsInstagram) "Пресет для Instagram / Meta" else "Пресет для YouTube / Discord"
         AlertDialog(
             onDismissRequest = { showStrategyDialog = false },
-            title = { Text("Выберите пресет стратегии") },
+            title = { Text(targetTitle) },
             text = {
                 Column(
                     modifier = Modifier
@@ -428,10 +479,19 @@ fun AntiDpiGroupScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = strat))
+                                    val newCfg = if (presetTargetIsInstagram) {
+                                        antiDpiConfig.copy(instagramStrategy = strat)
+                                    } else {
+                                        antiDpiConfig.copy(strategy = strat)
+                                    }
+                                    repository.updateAntiDpiConfig(newCfg)
                                     if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
                                         scope.launch {
-                                            ByeDpiController.start(strategy = strat)
+                                            ByeDpiController.start(
+                                                strategy = newCfg.strategy,
+                                                instagramStrategy = newCfg.instagramStrategy,
+                                                separateProfiles = newCfg.separateProfiles
+                                            )
                                         }
                                     }
                                     showStrategyDialog = false

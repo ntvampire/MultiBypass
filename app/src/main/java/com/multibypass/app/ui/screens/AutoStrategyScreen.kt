@@ -209,6 +209,71 @@ fun AutoStrategyScreen(
                     }
                 }
             } else {
+                val bestYt = remember(testResults) {
+                    testResults.firstOrNull { it.isWorking && (it.workingServices.contains("YT") || it.workingServices.contains("YTV")) }
+                }
+                val bestIg = remember(testResults) {
+                    testResults.firstOrNull { it.isWorking && it.workingServices.contains("IG") }
+                }
+
+                if (bestYt != null || bestIg != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "🎯 Рекомендуемая связка профилей",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentOrange
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            if (bestYt != null) {
+                                Text(
+                                    text = "• YouTube/Discord: ${bestYt.strategy} (${bestYt.latencyMs} мс)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (bestIg != null) {
+                                Text(
+                                    text = "• Instagram: ${bestIg.strategy} (${bestIg.latencyMs} мс)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    val newCfg = antiDpiConfig.copy(
+                                        strategy = bestYt?.strategy ?: antiDpiConfig.strategy,
+                                        instagramStrategy = bestIg?.strategy ?: antiDpiConfig.instagramStrategy,
+                                        separateProfiles = true
+                                    )
+                                    repository.updateAntiDpiConfig(newCfg)
+                                    if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                        coroutineScope.launch {
+                                            ByeDpiController.start(
+                                                strategy = newCfg.strategy,
+                                                instagramStrategy = newCfg.instagramStrategy,
+                                                separateProfiles = newCfg.separateProfiles
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+                            ) {
+                                Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Применить связку профилей", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -280,30 +345,70 @@ fun AutoStrategyScreen(
 
                                 if (res.isWorking) {
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    val isCurrent = antiDpiConfig.strategy == res.strategy
-                                    Surface(
-                                        onClick = {
-                                            if (!isCurrent) {
-                                                repository.updateAntiDpiConfig(antiDpiConfig.copy(strategy = res.strategy))
+                                    val isCurrentYt = antiDpiConfig.strategy == res.strategy
+                                    val isCurrentIg = antiDpiConfig.instagramStrategy == res.strategy
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        horizontalAlignment = Alignment.End
+                                    ) {
+                                        Surface(
+                                            onClick = {
+                                                val newCfg = antiDpiConfig.copy(strategy = res.strategy)
+                                                repository.updateAntiDpiConfig(newCfg)
                                                 if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
                                                     coroutineScope.launch {
-                                                        ByeDpiController.start(strategy = res.strategy)
+                                                        ByeDpiController.start(
+                                                            strategy = newCfg.strategy,
+                                                            instagramStrategy = newCfg.instagramStrategy,
+                                                            separateProfiles = newCfg.separateProfiles
+                                                        )
                                                     }
                                                 }
+                                            },
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isCurrentYt) GreenPrimary else DarkSurfaceVariant,
+                                            modifier = Modifier.height(26.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (isCurrentYt) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                }
+                                                Text("YT/General", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = if (isCurrentYt) Color.White else TextSecondary)
                                             }
-                                        },
-                                        enabled = !isCurrent,
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (isCurrent) GreenPrimary else DarkSurfaceVariant,
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = if (isCurrent) "Активна" else "Применить",
-                                                tint = if (isCurrent) Color.White else TextSecondary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
+                                        }
+
+                                        Surface(
+                                            onClick = {
+                                                val newCfg = antiDpiConfig.copy(instagramStrategy = res.strategy)
+                                                repository.updateAntiDpiConfig(newCfg)
+                                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                                    coroutineScope.launch {
+                                                        ByeDpiController.start(
+                                                            strategy = newCfg.strategy,
+                                                            instagramStrategy = newCfg.instagramStrategy,
+                                                            separateProfiles = newCfg.separateProfiles
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isCurrentIg) GreenPrimary else DarkSurfaceVariant,
+                                            modifier = Modifier.height(26.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (isCurrentIg) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                }
+                                                Text("Instagram", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = if (isCurrentIg) Color.White else TextSecondary)
+                                            }
                                         }
                                     }
                                 }
