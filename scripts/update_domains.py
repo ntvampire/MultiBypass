@@ -38,7 +38,7 @@ OUT_STRATEGIES_ASSETS = ASSETS_DIR / "strategies.txt"
 OUT_STRATEGIES_LIST_ASSETS = ASSETS_DIR / "proxytest_strategies.list"
 OUT_SMARTHOSTS_ASSETS = ASSETS_DIR / "smart-no-crutch.hosts"
 
-DEFAULT_STRATEGY = "-s1 -d3+s -a1 -At -r1+s -a1"
+DEFAULT_STRATEGY = "-s1 -f-1 -t5 -a1"
 
 # External upstream sources
 UPSTREAM_ANTIDPI_URLS = [
