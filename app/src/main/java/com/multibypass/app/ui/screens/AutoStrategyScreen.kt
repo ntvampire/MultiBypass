@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 
 enum class StrategyFilterTab(val label: String) {
     ALL("Все"),
-    YOUTUBE("▶ YouTube / Discord"),
+    YOUTUBE("▶ YouTube"),
     INSTAGRAM("📷 Instagram")
 }
 
@@ -116,105 +116,101 @@ fun AutoStrategyScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                // Компактный блок запуска/остановки теста
+                // Блок запуска/остановки теста
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Тестирование сетевых стратегий",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Тестирование стратегий",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                text = "Проверяемые сервисы:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                listOf("YT", "YTV", "IG").forEach { name ->
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = DarkSurfaceVariant
-                                    ) {
-                                        Text(
-                                            text = name,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = TextSecondary,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
+                            PresetStrategies.defaultTestTargets.forEach { target ->
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = DarkSurfaceVariant
+                                ) {
+                                    Text(
+                                        text = target.name,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
                                 }
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(14.dp))
+
                         if (isTesting) {
-                            Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(4.dp),
+                                    .height(6.dp),
                                 color = AccentOrange,
                                 trackColor = DarkSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "⏳ Идет подбор в фоне. Экран можно заблокировать — тест не прервется.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AccentOrange
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { tester.stopTest() },
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text(
-                                    text = "⏳ В фоне (экран можно гасить)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontSize = 11.sp,
-                                    color = AccentOrange
-                                )
-                                OutlinedButton(
-                                    onClick = { tester.stopTest() },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("Остановить", fontSize = 12.sp)
-                                }
+                                Text("Остановить тестирование")
                             }
                         } else {
-                            Spacer(modifier = Modifier.height(10.dp))
                             Button(
                                 onClick = { tester.startTest() },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(38.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
                             ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Запустить автоподбор", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Запустить автоподбор", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             }
                         }
                     }
                 }
             }
 
-            // Компактный блок рекомендуемой связки
+            // Блок рекомендуемой связки
             if (bestYt != null || bestIg != null) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -224,19 +220,21 @@ fun AutoStrategyScreen(
                                     text = "🎯 Рекомендуемая связка профилей",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = AccentOrange
+                                    color = AccentOrange,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 if (formattedDate.isNotEmpty() && !isTesting) {
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = formattedDate,
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        color = TextSecondary
+                                        color = TextSecondary,
+                                        maxLines = 1
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             if (bestYt != null) {
                                 Row(
@@ -244,54 +242,76 @@ fun AutoStrategyScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                        Text("• YT/General: ", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "• YouTube / Discord:",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                         Text(
                                             text = bestYt.strategy,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontFamily = FontFamily.Monospace,
+                                            color = TextSecondary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "${bestYt.getYtLatency() ?: bestYt.latencyMs} мс",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = GreenPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = GreenPrimary.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "${bestYt.getYtLatency() ?: bestYt.latencyMs} мс",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = GreenPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
 
                             if (bestIg != null) {
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                        Text("• Instagram: ", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "• Instagram:",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
                                         Text(
                                             text = bestIg.strategy,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontFamily = FontFamily.Monospace,
+                                            color = TextSecondary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "${bestIg.getIgLatency() ?: bestIg.latencyMs} мс",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = GreenPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = GreenPrimary.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "${bestIg.getIgLatency() ?: bestIg.latencyMs} мс",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = GreenPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             Button(
                                 onClick = {
@@ -313,14 +333,13 @@ fun AutoStrategyScreen(
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(36.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    .height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
                             ) {
-                                Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Применить связку профилей", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Применить связку профилей", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -348,10 +367,10 @@ fun AutoStrategyScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) AccentOrange.copy(alpha = 0.2f) else DarkSurface,
                                 border = if (isSelected) BorderStroke(1.dp, AccentOrange) else null,
-                                modifier = Modifier.height(32.dp)
+                                modifier = Modifier.height(34.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
@@ -359,7 +378,7 @@ fun AutoStrategyScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         color = if (isSelected) AccentOrange else TextSecondary,
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
                                     )
                                 }
                             }
@@ -368,7 +387,7 @@ fun AutoStrategyScreen(
                 }
             }
 
-            // Пустое состояние
+            // Пустое состояние или список результатов
             if (testResults.isEmpty() && !isTesting) {
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -414,7 +433,7 @@ fun AutoStrategyScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(10.dp),
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -424,15 +443,15 @@ fun AutoStrategyScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp
+                                    fontSize = 13.sp
                                 )
-                                Spacer(modifier = Modifier.height(3.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 when (selectedFilter) {
                                     StrategyFilterTab.YOUTUBE -> {
                                         if (res.hasYt()) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
                                                     text = "${res.getYtLatency()} мс",
@@ -444,21 +463,21 @@ fun AutoStrategyScreen(
                                                     text = if (res.hasFullYt()) " (YT + Видео)" else if (res.serviceLatencies.containsKey("YT")) " (только сайт)" else " (только видео)",
                                                     color = TextSecondary,
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    fontSize = 10.sp
+                                                    fontSize = 11.sp
                                                 )
                                             }
                                         } else {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Не работает для YouTube", color = RedDanger, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                                Text("Не работает для YouTube", color = RedDanger, style = MaterialTheme.typography.bodySmall)
                                             }
                                         }
                                     }
                                     StrategyFilterTab.INSTAGRAM -> {
                                         if (res.hasIg()) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
                                                     text = "${res.getIgLatency()} мс (Instagram)",
@@ -469,16 +488,16 @@ fun AutoStrategyScreen(
                                             }
                                         } else {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Не работает для Instagram", color = RedDanger, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                                Text("Не работает для Instagram", color = RedDanger, style = MaterialTheme.typography.bodySmall)
                                             }
                                         }
                                     }
                                     StrategyFilterTab.ALL -> {
                                         if (res.isWorking) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
                                                     text = "${res.latencyMs} мс (${res.successfulSitesCount}/${res.testedSitesCount})",
@@ -489,16 +508,16 @@ fun AutoStrategyScreen(
                                             }
                                         } else {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.Cancel, contentDescription = null, tint = RedDanger, modifier = Modifier.size(15.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Не работает ни один сервис", color = RedDanger, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp)
+                                                Text("Не работает ни один сервис", color = RedDanger, style = MaterialTheme.typography.bodySmall)
                                             }
                                         }
                                     }
                                 }
 
                                 if (res.workingServices.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Row(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -519,9 +538,9 @@ fun AutoStrategyScreen(
                                                     text = "$shortName$sLat",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = if (isHighlight) GreenPrimary else TextSecondary,
-                                                    fontSize = 9.sp,
+                                                    fontSize = 10.sp,
                                                     fontWeight = FontWeight.SemiBold,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                                 )
                                             }
                                         }
@@ -554,10 +573,10 @@ fun AutoStrategyScreen(
                                         shape = RoundedCornerShape(6.dp),
                                         color = if (isCurrentYt) GreenPrimary else DarkSurfaceVariant,
                                         border = if (!isCurrentYt && selectedFilter == StrategyFilterTab.YOUTUBE && res.hasYt()) BorderStroke(1.dp, AccentOrange.copy(alpha = 0.6f)) else null,
-                                        modifier = Modifier.height(26.dp)
+                                        modifier = Modifier.height(28.dp)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (isCurrentYt) {
@@ -590,10 +609,10 @@ fun AutoStrategyScreen(
                                         shape = RoundedCornerShape(6.dp),
                                         color = if (isCurrentIg) GreenPrimary else DarkSurfaceVariant,
                                         border = if (!isCurrentIg && selectedFilter == StrategyFilterTab.INSTAGRAM && res.hasIg()) BorderStroke(1.dp, AccentOrange.copy(alpha = 0.6f)) else null,
-                                        modifier = Modifier.height(26.dp)
+                                        modifier = Modifier.height(28.dp)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (isCurrentIg) {
