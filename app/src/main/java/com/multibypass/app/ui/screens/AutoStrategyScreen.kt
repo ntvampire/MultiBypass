@@ -221,7 +221,7 @@ fun AutoStrategyScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = AccentOrange,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    modifier = Modifier.weight(1f)
                                 )
                                 if (formattedDate.isNotEmpty() && !isTesting) {
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -229,7 +229,8 @@ fun AutoStrategyScreen(
                                         text = formattedDate,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }

@@ -16,6 +16,7 @@ import re
 import sys
 import time
 import urllib.request
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ ASSETS_DIR = REPO_ROOT / "app" / "src" / "main" / "assets"
 
 SEEDS_ANTIDPI_FILE = SEEDS_DIR / "seeds_antidpi.txt"
 SEEDS_STRATEGIES_FILE = SEEDS_DIR / "seeds_strategies.txt"
+SEEDS_GEOBLOCK_FILE = SEEDS_DIR / "seeds_geoblock.txt"
 
 OUT_ANTIDPI_DOCS = DOCS_DIR / "domains_antidpi.txt"
 OUT_STRATEGIES_DOCS = DOCS_DIR / "strategies.txt"
@@ -40,14 +42,29 @@ OUT_SMARTHOSTS_ASSETS = ASSETS_DIR / "smart-no-crutch.hosts"
 
 DEFAULT_STRATEGY = "-s1 -f-1 -t5 -a1"
 
-# External upstream sources
+# External upstream sources for Anti-DPI
 UPSTREAM_ANTIDPI_URLS = [
     # Flowseal community lists for Discord, YouTube, GGC and voice endpoints
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/lists/list-general.txt",
     "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/lists/list-google.txt",
 ]
 
-UPSTREAM_SMARTHOSTS_URL = "https://raw.githubusercontent.com/Noktomezo/RussiaFancyLists/main/lists/hosts/smart-no-crutch.hosts"
+# Primary SmartHosts SNI-proxy providers for geoblock bypass
+SMARTHOSTS_PROVIDERS = [
+    ("GeoHide EU", "https://geohide.ru/eu/hosts"),
+    ("ImMALWARE", "https://raw.githubusercontent.com/ImMALWARE/dns.malw.link/refs/heads/master/hosts"),
+    ("AstraCat", "https://raw.githubusercontent.com/ASTRACAT2022/host-DNS/main/base_hosts.txt"),
+    ("Noktomezo (Fallback)", "https://raw.githubusercontent.com/Noktomezo/RussiaFancyLists/main/lists/hosts/smart-no-crutch.hosts"),
+]
+
+# Anti-DPI service roots to strictly exclude from SmartHosts (these are handled by ByeByeDPI)
+ANTIDPI_ROOTS = [
+    "youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com", "gvt1.com", "gvt2.com",
+    "discord.com", "discordapp.com", "discord.gg",
+    "instagram.com", "cdninstagram.com", "facebook.com", "fbcdn.net",
+    "twitter.com", "twimg.com", "t.co", "x.com",
+    "signal.org", "whatsapp.com"
+]
 
 # Specific domains to exclude from SmartHosts to prevent conflicts or service breakages
 SMARTHOSTS_EXCLUDED_DOMAINS = {
@@ -185,6 +202,31 @@ def process_strategies() -> list[str]:
     return strategies
 
 
+def is_private_ip(ip: str) -> bool:
+    """Check if IPv4 address is loopback, broadcast or private network."""
+    if ip.startswith(("127.", "0.", "10.", "192.168.", "169.254.")):
+        return True
+    if ip.startswith("172."):
+        parts = ip.split(".")
+        if len(parts) > 1:
+            try:
+                octet = int(parts[1])
+                if 16 <= octet <= 31:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
+def is_antidpi_domain(domain: str) -> bool:
+    """Check if domain belongs to Anti-DPI (ByeByeDPI) and should never be routed to SmartHosts."""
+    d = domain.lower()
+    for root in ANTIDPI_ROOTS:
+        if d == root or d.endswith("." + root):
+            return True
+    return False
+
+
 def is_smarthosts_excluded(domain: str) -> bool:
     """Check if domain should be stripped from SmartHosts SNI relay."""
     d = domain.strip().lower().rstrip(".")
@@ -194,54 +236,103 @@ def is_smarthosts_excluded(domain: str) -> bool:
         return True
     if d in SMARTHOSTS_EXCLUDED_DOMAINS:
         return True
+    if is_antidpi_domain(d):
+        return True
     return False
 
 
 def process_smarthosts() -> tuple[str, int]:
-    """Fetch, sanitize and format SmartHosts geoblock mapping."""
-    print(f"Fetching upstream SmartHosts: {UPSTREAM_SMARTHOSTS_URL}")
-    raw_content = fetch_url(UPSTREAM_SMARTHOSTS_URL, timeout=15)
-    if not raw_content and OUT_SMARTHOSTS_ASSETS.exists():
-        print("[WARN] Failed to fetch upstream SmartHosts, using local assets fallback.")
-        with open(OUT_SMARTHOSTS_ASSETS, "r", encoding="utf-8") as f:
-            raw_content = f.read()
+    """
+    Fetch, aggregate, sanitize and format SmartHosts geoblock mapping
+    from primary European SNI proxy providers (GeoHide EU, ImMALWARE, AstraCat, Noktomezo).
+    """
+    geoblock_seeds = set(load_seeds(SEEDS_GEOBLOCK_FILE))
+    print(f"Loaded {len(geoblock_seeds)} curated geoblock seed domains.")
 
-    if not raw_content:
-        print("[ERROR] SmartHosts content is empty!", file=sys.stderr)
+    domain_to_ips: dict[str, list[str]] = defaultdict(list)
+    successful_providers = 0
+
+    for name, url in SMARTHOSTS_PROVIDERS:
+        print(f"Fetching SmartHosts provider: {name} ({url})")
+        content = fetch_url(url, timeout=15)
+        if not content:
+            print(f"  [WARN] Failed to fetch {name}")
+            continue
+
+        successful_providers += 1
+        added_entries = 0
+        for line in content.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+
+            tokens = s.split()
+            if len(tokens) < 2:
+                continue
+
+            ip = tokens[0].strip()
+            if not IPV4_REGEX.match(ip) or is_private_ip(ip):
+                continue
+
+            for dom in tokens[1:]:
+                cdom = clean_domain(dom)
+                if not cdom or is_smarthosts_excluded(cdom):
+                    continue
+
+                if ip not in domain_to_ips[cdom]:
+                    domain_to_ips[cdom].append(ip)
+                    added_entries += 1
+
+        print(f"  Processed {name}: +{added_entries} entries (running total: {len(domain_to_ips)} domains)")
+
+    # Fallback to local asset if all network fetches failed
+    if not domain_to_ips and OUT_SMARTHOSTS_ASSETS.exists():
+        print("[WARN] All remote SmartHosts providers failed! Falling back to bundled assets.", file=sys.stderr)
+        with open(OUT_SMARTHOSTS_ASSETS, "r", encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                tokens = s.split()
+                if len(tokens) < 2:
+                    continue
+                ip = tokens[0].strip()
+                if not IPV4_REGEX.match(ip) or is_private_ip(ip):
+                    continue
+                for dom in tokens[1:]:
+                    cdom = clean_domain(dom)
+                    if cdom and not is_smarthosts_excluded(cdom):
+                        if ip not in domain_to_ips[cdom]:
+                            domain_to_ips[cdom].append(ip)
+
+    if not domain_to_ips:
+        print("[ERROR] SmartHosts mapping is completely empty!", file=sys.stderr)
         return "", 0
 
-    unique_domains = set()
+    # Group domains by proxy IP (keeping top 2 unique IPs per domain for redundancy without packet bloat)
+    ip_to_domains: dict[str, list[str]] = defaultdict(list)
+    for dom, ips in sorted(domain_to_ips.items()):
+        for ip in ips[:2]:
+            ip_to_domains[ip].append(dom)
+
     cleaned_lines = [
         "# MultiBypass - SmartHosts Geoblock SNI-Relay Map",
-        "# Processed and sanitized: 4PDA, Google Sign-In, suggestqueries and RU/BY domains excluded.",
+        "# Autonomous multi-provider aggregation (GeoHide EU, ImMALWARE, AstraCat).",
+        "# Processed and sanitized: 4PDA, Google Sign-In, suggestqueries, Anti-DPI and domestic RU/BY services excluded.",
+        f"# Total unique geoblock domains: {len(domain_to_ips)}, proxy endpoints: {len(ip_to_domains)}",
         ""
     ]
 
-    for line in raw_content.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-
-        tokens = s.split()
-        if len(tokens) < 2:
-            continue
-
-        ip = tokens[0].strip()
-        if not IPV4_REGEX.match(ip) or ip in ("127.0.0.1", "0.0.0.0"):
-            continue
-
-        valid_domains = []
-        for dom in tokens[1:]:
-            cdom = clean_domain(dom)
-            if cdom and not is_smarthosts_excluded(cdom):
-                valid_domains.append(cdom)
-                unique_domains.add(cdom)
-
-        if valid_domains:
-            cleaned_lines.append(f"{ip} {' '.join(sorted(valid_domains))}")
+    # Format into /etc/hosts lines chunked by 6 domains per line for clean readability
+    for ip in sorted(ip_to_domains.keys()):
+        doms = sorted(list(set(ip_to_domains[ip])))
+        chunk_size = 6
+        for i in range(0, len(doms), chunk_size):
+            chunk = doms[i:i + chunk_size]
+            cleaned_lines.append(f"{ip} {' '.join(chunk)}")
 
     result_text = "\n".join(cleaned_lines) + "\n"
-    return result_text, len(unique_domains)
+    return result_text, len(domain_to_ips)
 
 
 def main():
