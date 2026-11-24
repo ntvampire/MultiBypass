@@ -22,7 +22,34 @@ object SmartHostsDnsRelay {
     private const val TAG = "SmartHostsDnsRelay"
     private const val FALLBACK_DNS_IP = "77.88.8.8" // Yandex DNS fallback
     private const val DNS_TIMEOUT_MS = 2500
-    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "1.1.1.1", "9.9.9.9")
+    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "1.1.1.1", "9.9.9.9", "77.88.8.8")
+
+    private val CORE_ANTIDPI_ROOT_DOMAINS = setOf(
+        "googlevideo.com",
+        "youtube.com",
+        "ytimg.com",
+        "ggpht.com",
+        "googleusercontent.com",
+        "gvt1.com",
+        "gvt2.com",
+        "youtu.be",
+        "instagram.com",
+        "cdninstagram.com",
+        "facebook.com",
+        "fbcdn.net",
+        "threads.net",
+        "meta.com",
+        "discord.com",
+        "discord.gg",
+        "discordapp.com",
+        "discordapp.net",
+        "discordcdn.com",
+        "discord.media",
+        "twitter.com",
+        "x.com",
+        "twimg.com",
+        "t.co"
+    )
 
     @Volatile
     private var cachedUpstreamDns: String? = null
@@ -58,6 +85,9 @@ object SmartHostsDnsRelay {
 
     fun isAntiDpiDomain(context: Context, domain: String): Boolean {
         val q = domain.trim().lowercase().removeSuffix(".")
+        if (CORE_ANTIDPI_ROOT_DOMAINS.any { q == it || q.endsWith(".$it") }) {
+            return true
+        }
         val set = getAntiDpiDomains(context)
         return set.any { q == it || q.endsWith(".$it") }
     }
@@ -81,6 +111,16 @@ object SmartHostsDnsRelay {
         val parsed = DnsPacketCodec.parseQuery(queryData, queryLength)
 
         if (parsed != null) {
+            // 0. Suppress DNS Type 65 (HTTPS / SVCB) for Anti-DPI & Geoblocked domains
+            // Android 12+ (Cronet/Chrome/YouTube/Instagram) requests Type 65 to discover HTTP/3 (QUIC).
+            // Returning NODATA immediately forces the client to use TCP TLS 1.3 without waiting for QUIC UDP timeouts.
+            if (parsed.qtype == DnsPacketCodec.TYPE_HTTPS) {
+                if (isAntiDpiDomain(context, parsed.qname) || SmartHostsManager.isGeoblocked(parsed.qname)) {
+                    Log.d(TAG, "HTTPS Type 65 suppressed (NODATA -> instant TCP fallback): ${parsed.qname}")
+                    return DnsPacketCodec.buildNoDataResponse(parsed)
+                }
+            }
+
             // 1. Check SmartHosts for geoblocked domain
             if (parsed.qtype == DnsPacketCodec.TYPE_A) {
                 val mappedIps = SmartHostsManager.resolve(parsed.qname)
@@ -97,7 +137,7 @@ object SmartHostsDnsRelay {
 
             // 2. Check if domain is in Anti-DPI list (YouTube CDN, Instagram CDN, etc.)
             // Carriers frequently poison DNS for these domains (returning 0.0.0.0 or 127.0.0.1).
-            // Query clean public DNS (8.8.8.8, 1.1.1.1) to obtain the real IP for ByeDPI.
+            // Query clean public DNS (8.8.8.8, 1.1.1.1, 9.9.9.9, 77.88.8.8) to obtain the real IP for ByeDPI.
             if (isAntiDpiDomain(context, parsed.qname)) {
                 val cleanResponse = queryCleanDns(queryData, queryLength)
                 if (cleanResponse != null) {

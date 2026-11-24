@@ -11,6 +11,9 @@ i.ytimg.com
 ggpht.com
 yt3.ggpht.com
 yt4.ggpht.com
+googleusercontent.com
+gvt1.com
+gvt2.com
 youtubei.googleapis.com
 jnn-pa.googleapis.com
 manifest.googlevideo.com

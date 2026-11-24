@@ -32,8 +32,11 @@ fbcdn.net
 gateway.discord.gg
 gateway.instagram.com
 ggpht.com
+googleusercontent.com
 googlevideo.com
 graph.instagram.com
+gvt1.com
+gvt2.com
 i.instagram.com
 i.ytimg.com
 instagram.com

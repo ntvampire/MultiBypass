@@ -10,6 +10,7 @@ object DnsPacketCodec {
 
     const val TYPE_A = 1
     const val TYPE_AAAA = 28
+    const val TYPE_HTTPS = 65
     const val CLASS_IN = 1
 
     data class ParsedQuery(

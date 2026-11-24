@@ -24,7 +24,7 @@ class SettingsRepository(private val context: Context) {
         private const val KEY_ROUTED_APPS = "key_routed_apps"
         private const val KEY_ROUTE_ALL_APPS = "key_route_all_apps"
         private const val KEY_DOMAINS_VERSION = "key_domains_version"
-        private const val CURRENT_DOMAINS_VERSION = 14
+        private const val CURRENT_DOMAINS_VERSION = 15
         private const val KEY_LAST_STRATEGY_RESULTS = "key_last_strategy_results"
         private const val KEY_LAST_STRATEGY_TIMESTAMP = "key_last_strategy_timestamp"
 
@@ -59,7 +59,7 @@ class SettingsRepository(private val context: Context) {
     private val _routedApps = MutableStateFlow(loadRoutedApps())
     val routedApps: StateFlow<List<String>> = _routedApps.asStateFlow()
 
-    private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, true))
+    private val _routeAllApps = MutableStateFlow(prefs.getBoolean(KEY_ROUTE_ALL_APPS, false))
     val routeAllApps: StateFlow<Boolean> = _routeAllApps.asStateFlow()
 
     private val _lastStrategyResults = MutableStateFlow(loadLastStrategyResults())
@@ -106,6 +106,12 @@ class SettingsRepository(private val context: Context) {
             if (currentRouted.contains("com.google.android.gms")) {
                 currentRouted.remove("com.google.android.gms")
                 updateRoutedApps(currentRouted.distinct())
+            }
+
+            if (domainVer < 15) {
+                // By default route only recommended apps instead of all apps
+                _routeAllApps.value = false
+                prefs.edit().putBoolean(KEY_ROUTE_ALL_APPS, false).apply()
             }
 
             // Invalidate legacy cached list files so updated bundled presets and lists take immediate effect

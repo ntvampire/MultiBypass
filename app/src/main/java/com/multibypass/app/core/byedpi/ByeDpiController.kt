@@ -52,9 +52,36 @@ object ByeDpiController {
             } else {
                 context.assets.open("domains_antidpi.txt").bufferedReader().use { it.readText() }
             }
-            val cleanDomains = content.lines()
+            val coreRoots = setOf(
+                "googlevideo.com",
+                "youtube.com",
+                "ytimg.com",
+                "ggpht.com",
+                "googleusercontent.com",
+                "gvt1.com",
+                "gvt2.com",
+                "youtu.be",
+                "instagram.com",
+                "cdninstagram.com",
+                "facebook.com",
+                "fbcdn.net",
+                "threads.net",
+                "meta.com",
+                "discord.com",
+                "discord.gg",
+                "discordapp.com",
+                "discordapp.net",
+                "discordcdn.com",
+                "discord.media",
+                "twitter.com",
+                "x.com",
+                "twimg.com",
+                "t.co"
+            )
+            val parsedLines = content.lines()
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() && !it.startsWith("#") }
+            val cleanDomains = (parsedLines + coreRoots).distinct()
 
             targetFile.writeText(cleanDomains.joinToString("\n"))
             hostsFilePath = targetFile.absolutePath

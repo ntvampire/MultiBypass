@@ -176,27 +176,6 @@ fun AppPickerBottomSheet(
                 ) {
                     Text("+ Медиа / DPI", fontSize = 12.sp, maxLines = 1)
                 }
-
-                val areAllSelected = appList.isNotEmpty() && appList.all { currentSelected.contains(it.packageName) }
-
-                OutlinedButton(
-                    onClick = {
-                        if (areAllSelected) {
-                            currentSelected.clear()
-                        } else {
-                            currentSelected.clear()
-                            currentSelected.addAll(appList.map { it.packageName })
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(
-                        if (areAllSelected) "Снять все" else "Выбрать все",
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

@@ -95,7 +95,9 @@ val GEOBLOCK_PACKAGES = setOf(
 
 val ANTIDPI_PACKAGES = setOf(
     "com.google.android.youtube",
+    "com.google.android.apps.youtube.music",
     "app.revanced.android.youtube",
+    "app.revanced.android.apps.youtube.music",
     "com.vanced.android.youtube",
     "com.discord",
     "com.instagram.android",
