@@ -30,6 +30,13 @@ enum class Screen {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_NAVIGATE_TO = "navigate_to"
+        const val DEST_AUTO_STRATEGY = "auto_strategy"
+    }
+
+    private var currentScreen by mutableStateOf(Screen.MAIN)
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -45,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        handleNavigationIntent(intent)
         checkNotificationPermission()
 
         setContent {
@@ -53,8 +61,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = DarkBackground
                 ) {
-                    var currentScreen by remember { mutableStateOf(Screen.MAIN) }
-
                     if (currentScreen != Screen.MAIN) {
                         BackHandler {
                             currentScreen = when (currentScreen) {
@@ -86,6 +92,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavigationIntent(intent)
+    }
+
+    private fun handleNavigationIntent(intent: Intent?) {
+        if (intent?.getStringExtra(EXTRA_NAVIGATE_TO) == DEST_AUTO_STRATEGY) {
+            currentScreen = Screen.AUTO_STRATEGY
         }
     }
 

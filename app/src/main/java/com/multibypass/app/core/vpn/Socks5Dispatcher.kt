@@ -276,14 +276,23 @@ object Socks5Dispatcher {
 
                         val payload = data.copyOfRange(headerOffset, len)
 
-                        // 1. DNS-запросы (UDP 53): перехватываем SmartHosts
+                        // 1. DNS-запросы (UDP 53): асинхронно перехватываем в SmartHostsDnsRelay без блокировки цикла
                         if (uPort == 53) {
-                            val dnsResponse = SmartHostsDnsRelay.handleDnsQuery(context, payload, payload.size)
-                            if (dnsResponse != null && clientUdpAddr != null) {
-                                val replyHeader = data.copyOfRange(0, headerOffset)
-                                val fullReply = replyHeader + dnsResponse
-                                val respPacket = DatagramPacket(fullReply, fullReply.size, clientUdpAddr)
-                                localUdpSocket.send(respPacket)
+                            val targetClientAddr = clientUdpAddr
+                            val replyHdr = data.copyOfRange(0, headerOffset)
+                            scope.launch {
+                                try {
+                                    val dnsResponse = SmartHostsDnsRelay.handleDnsQuery(context, payload, payload.size)
+                                    if (dnsResponse != null && targetClientAddr != null && !localUdpSocket.isClosed) {
+                                        val fullReply = replyHdr + dnsResponse
+                                        val respPacket = DatagramPacket(fullReply, fullReply.size, targetClientAddr)
+                                        synchronized(localUdpSocket) {
+                                            if (!localUdpSocket.isClosed) {
+                                                localUdpSocket.send(respPacket)
+                                            }
+                                        }
+                                    }
+                                } catch (_: Exception) {}
                             }
                             continue
                         }
@@ -350,7 +359,7 @@ object Socks5Dispatcher {
         }
     }
 
-    private fun forwardToDownstream(
+    private suspend fun forwardToDownstream(
         client: Socket,
         atyp: Int,
         rawAddrBytes: ByteArray,
@@ -360,11 +369,20 @@ object Socks5Dispatcher {
     ) {
         var downstream: Socket? = null
         try {
+            val cIn = client.getInputStream()
+            val cOut = client.getOutputStream()
+
             val dSocket = Socket()
             dSocket.tcpNoDelay = true
             dSocket.soTimeout = SOCKET_TIMEOUT_MS
             client.soTimeout = SOCKET_TIMEOUT_MS
-            dSocket.connect(InetSocketAddress("127.0.0.1", downstreamPort), 3000)
+            try {
+                dSocket.connect(InetSocketAddress("127.0.0.1", downstreamPort), 3000)
+            } catch (e: Exception) {
+                Log.w(TAG, "Downstream ByeByeDPI on port $downstreamPort unreachable: ${e.message}")
+                try { sendSocksReply(cOut, rep = 0x05) } catch (_: Exception) {}
+                return
+            }
             downstream = dSocket
             activeSockets.add(dSocket)
 
@@ -376,34 +394,42 @@ object Socks5Dispatcher {
             dOut.flush()
             val greeting = ByteArray(2)
             readFully(dIn, greeting)
+            if (greeting[0] != 0x05.toByte() || greeting[1] != 0x00.toByte()) {
+                try { sendSocksReply(cOut, rep = 0x01) } catch (_: Exception) {}
+                return
+            }
 
-            // Передаем CONNECT запрос
+            // Передаем CONNECT запрос и дожидаемся полного SOCKS5-ответа от ByeByeDPI
             val req = byteArrayOf(0x05, 0x01, 0x00, atyp.toByte()) + rawAddrBytes + byteArrayOf(p1, p2)
             dOut.write(req)
             dOut.flush()
 
-            val cIn = client.getInputStream()
-            val cOut = client.getOutputStream()
-
-            // Двунаправленная прокачка данных
-            val t1 = Thread {
-                val buf = ByteArray(16384)
-                try {
-                    while (true) {
-                        val n = cIn.read(buf)
-                        if (n <= 0) break
-                        dOut.write(buf, 0, n)
-                        dOut.flush()
-                    }
-                } catch (_: Exception) {} finally {
-                    try { dSocket.shutdownOutput() } catch (_: Exception) {}
-                }
+            val connectReply = readSocksReply(dIn)
+            cOut.write(connectReply)
+            cOut.flush()
+            if (connectReply[1] != 0x00.toByte()) {
+                return
             }
 
-            val t2 = Thread {
+            // Двунаправленная прокачка данных на пуле корутин Dispatchers.IO без спавна лишних Thread
+            coroutineScope {
+                val uploadJob = launch(Dispatchers.IO) {
+                    val buf = ByteArray(16384)
+                    try {
+                        while (isActive) {
+                            val n = cIn.read(buf)
+                            if (n <= 0) break
+                            dOut.write(buf, 0, n)
+                            dOut.flush()
+                        }
+                    } catch (_: Exception) {} finally {
+                        try { dSocket.shutdownOutput() } catch (_: Exception) {}
+                    }
+                }
+
                 val buf = ByteArray(16384)
                 try {
-                    while (true) {
+                    while (isActive) {
                         val n = dIn.read(buf)
                         if (n <= 0) break
                         cOut.write(buf, 0, n)
@@ -412,21 +438,36 @@ object Socks5Dispatcher {
                 } catch (_: Exception) {} finally {
                     try { client.shutdownOutput() } catch (_: Exception) {}
                 }
+
+                uploadJob.join()
             }
 
-            t1.start()
-            t2.start()
-
-            t1.join()
-            t2.join()
-
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Игнорируем штатные разрывы соединений
         } finally {
             try { client.close() } catch (_: Exception) {}
             try { downstream?.close() } catch (_: Exception) {}
             downstream?.let { activeSockets.remove(it) }
         }
+    }
+
+    private fun readSocksReply(input: InputStream): ByteArray {
+        val header = ByteArray(4)
+        readFully(input, header)
+        val addrAndPort = when (header[3].toInt() and 0xFF) {
+            0x01 -> ByteArray(6) // IPv4 (4) + Port (2)
+            0x04 -> ByteArray(18) // IPv6 (16) + Port (2)
+            0x03 -> {
+                val len = input.read()
+                if (len < 0) throw java.io.EOFException("Unexpected EOF reading SOCKS5 domain length")
+                val rest = ByteArray(len + 2)
+                readFully(input, rest)
+                return header + byteArrayOf(len.toByte()) + rest
+            }
+            else -> throw java.io.IOException("Unsupported SOCKS5 reply ATYP: ${header[3]}")
+        }
+        readFully(input, addrAndPort)
+        return header + addrAndPort
     }
 
     private fun sendSocksReply(out: OutputStream, rep: Byte, bndPort: Int = 0) {

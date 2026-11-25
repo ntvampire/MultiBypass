@@ -129,7 +129,8 @@ object ByeDpiController {
             val fullCmd = if (useHosts && separateProfiles && !metaHostsFilePath.isNullOrBlank() && !generalHostsFilePath.isNullOrBlank()) {
                 val sMeta = sanitize(instagramStrategy)
                 val sGeneral = sanitize(strategy)
-                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$metaHostsFilePath\" $sMeta -A --hosts \"$generalHostsFilePath\" $sGeneral"
+                // -A n switches to the next group strictly by --hosts match without auto-failover triggers
+                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$metaHostsFilePath\" $sMeta -A n --hosts \"$generalHostsFilePath\" $sGeneral"
             } else if (useHosts && !hostsFilePath.isNullOrBlank()) {
                 val s = sanitize(strategy)
                 "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$hostsFilePath\" $s"
@@ -144,7 +145,11 @@ object ByeDpiController {
                 _isRunning.value = true
                 Log.i(TAG, "Starting ByeByeDPI with args: $fullCmd")
                 val code = ByeDpiProxy.jniStartProxy(args)
-                Log.i(TAG, "ByeByeDPI exited with code: $code")
+                if (code != 0) {
+                    Log.e(TAG, "ByeByeDPI exited with non-zero code: $code (cmd: $fullCmd)")
+                } else {
+                    Log.i(TAG, "ByeByeDPI exited normally with code: 0")
+                }
                 _isRunning.value = false
             }
         }

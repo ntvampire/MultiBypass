@@ -14,8 +14,8 @@ android {
         applicationId = "com.multibypass.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 47
-        versionName = "3.3.0"
+        versionCode = 48
+        versionName = "3.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

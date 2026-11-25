@@ -4,25 +4,71 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.util.Log
 import com.multibypass.app.core.vpn.MultiBypassVpnService
-import kotlinx.coroutines.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.dnsoverhttps.DnsOverHttps
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
-import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * SmartHosts DNS Relay:
  * Intercepts DNS queries on port 53.
- * - If domain is in SmartHosts (ChatGPT, Claude, Gemini, etc.): answers instantly with European SNI proxy IP.
- * - Otherwise: forwards query to the active network DNS (e.g. mobile operator) via a protected socket,
- *   ensuring 100% compatibility with carrier whitelists and domestic services.
+ * - Suppresses DNS Type 65 (HTTPS/SVCB) for Anti-DPI and Geoblocked domains to force instant TCP TLS 1.3.
+ * - Suppresses IPv6 (AAAA) for Anti-DPI and Geoblocked domains since TUN only intercepts IPv4.
+ * - SmartHosts (ChatGPT, Claude, Gemini, etc.): answers instantly with European SNI proxy IP.
+ * - Anti-DPI (YouTube, Instagram, Discord, X): resolves via encrypted DoH (with RAM cache & UDP fallback)
+ *   to prevent carrier DNS spoofing or UDP:53 hijacking on cellular networks.
+ * - Everything else: forwards to active carrier/Wi-Fi DNS via protected socket for whitelist compatibility.
  */
 object SmartHostsDnsRelay {
 
     private const val TAG = "SmartHostsDnsRelay"
     private const val FALLBACK_DNS_IP = "77.88.8.8" // Yandex DNS fallback
     private const val DNS_TIMEOUT_MS = 2500
-    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "1.1.1.1", "9.9.9.9", "77.88.8.8")
+    private const val ANTI_DPI_CACHE_TTL_MS = 120_000L
+    private const val ANTI_DPI_CACHE_MAX_SIZE = 512
+    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "9.9.9.9", "77.88.8.8", "1.1.1.1")
+
+    private data class CachedIpv4Entry(
+        val ips: List<String>,
+        val expiresAtMs: Long
+    )
+
+    private val antiDpiIpCache = ConcurrentHashMap<String, CachedIpv4Entry>()
+
+    private val dohBaseClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(1800, TimeUnit.MILLISECONDS)
+            .readTimeout(1800, TimeUnit.MILLISECONDS)
+            .callTimeout(2500, TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+    }
+
+    private val dohResolvers: List<DnsOverHttps> by lazy {
+        listOfNotNull(
+            createDoh("https://dns.google/dns-query", "8.8.8.8", "8.8.4.4"),
+            createDoh("https://dns.quad9.net/dns-query", "9.9.9.9", "149.112.112.112")
+        )
+    }
+
+    private fun createDoh(url: String, vararg bootstrapIps: String): DnsOverHttps? {
+        return try {
+            DnsOverHttps.Builder()
+                .client(dohBaseClient)
+                .url(url.toHttpUrl())
+                .bootstrapDnsHosts(bootstrapIps.map { InetAddress.getByName(it) })
+                .includeIPv6(false)
+                .build()
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to init DoH resolver $url: ${t.message}")
+            null
+        }
+    }
 
     private val CORE_ANTIDPI_ROOT_DOMAINS = setOf(
         "googlevideo.com",
@@ -59,6 +105,7 @@ object SmartHostsDnsRelay {
 
     fun clearAntiDpiCache() {
         antiDpiDomainsCache = null
+        antiDpiIpCache.clear()
     }
 
     private fun getAntiDpiDomains(context: Context): Set<String> {
@@ -94,6 +141,7 @@ object SmartHostsDnsRelay {
 
     fun refreshUpstreamDns(context: Context) {
         cachedUpstreamDns = null
+        antiDpiIpCache.clear()
         val newDns = getUpstreamDnsIp(context)
         cachedUpstreamDns = newDns
         Log.i(TAG, "Upstream DNS refreshed to: $newDns")
@@ -111,42 +159,45 @@ object SmartHostsDnsRelay {
         val parsed = DnsPacketCodec.parseQuery(queryData, queryLength)
 
         if (parsed != null) {
+            val isAntiDpi = isAntiDpiDomain(context, parsed.qname)
+            val isGeoblocked = SmartHostsManager.isGeoblocked(parsed.qname)
+
             // 0. Suppress DNS Type 65 (HTTPS / SVCB) for Anti-DPI & Geoblocked domains
-            // Android 12+ (Cronet/Chrome/YouTube/Instagram) requests Type 65 to discover HTTP/3 (QUIC).
-            // Returning NODATA immediately forces the client to use TCP TLS 1.3 without waiting for QUIC UDP timeouts.
-            if (parsed.qtype == DnsPacketCodec.TYPE_HTTPS) {
-                if (isAntiDpiDomain(context, parsed.qname) || SmartHostsManager.isGeoblocked(parsed.qname)) {
-                    Log.d(TAG, "HTTPS Type 65 suppressed (NODATA -> instant TCP fallback): ${parsed.qname}")
-                    return DnsPacketCodec.buildNoDataResponse(parsed)
-                }
+            // Forces Android Cronet/Chrome/YouTube/Instagram onto TCP TLS 1.3 without waiting for QUIC UDP timeouts.
+            if (parsed.qtype == DnsPacketCodec.TYPE_HTTPS && (isAntiDpi || isGeoblocked)) {
+                Log.d(TAG, "HTTPS Type 65 suppressed (NODATA -> instant TCP fallback): ${parsed.qname}")
+                return DnsPacketCodec.buildNoDataResponse(parsed)
             }
 
-            // 1. Check SmartHosts for geoblocked domain
+            // 1. Suppress AAAA (IPv6) for SmartHosts & Anti-DPI domains so LTE IPv6 never bypasses our IPv4 TUN
+            if (parsed.qtype == DnsPacketCodec.TYPE_AAAA && (isGeoblocked || isAntiDpi)) {
+                Log.d(TAG, "AAAA suppressed (NODATA -> keep traffic inside IPv4 TUN): ${parsed.qname}")
+                return DnsPacketCodec.buildNoDataResponse(parsed)
+            }
+
+            // 2. Check SmartHosts for geoblocked domain
             if (parsed.qtype == DnsPacketCodec.TYPE_A) {
                 val mappedIps = SmartHostsManager.resolve(parsed.qname)
                 if (!mappedIps.isNullOrEmpty()) {
                     Log.d(TAG, "SmartHosts HIT: ${parsed.qname} -> ${mappedIps.first()} (instant 0 ms)")
                     return DnsPacketCodec.buildAResponse(parsed, mappedIps)
                 }
-            } else if (parsed.qtype == DnsPacketCodec.TYPE_AAAA) {
-                if (SmartHostsManager.isGeoblocked(parsed.qname)) {
-                    Log.d(TAG, "SmartHosts AAAA NODATA: ${parsed.qname}")
-                    return DnsPacketCodec.buildNoDataResponse(parsed)
-                }
             }
 
-            // 2. Check if domain is in Anti-DPI list (YouTube CDN, Instagram CDN, etc.)
-            // Carriers frequently poison DNS for these domains (returning 0.0.0.0 or 127.0.0.1).
-            // Query clean public DNS (8.8.8.8, 1.1.1.1, 9.9.9.9, 77.88.8.8) to obtain the real IP for ByeDPI.
-            if (isAntiDpiDomain(context, parsed.qname)) {
-                val cleanResponse = queryCleanDns(queryData, queryLength)
-                if (cleanResponse != null) {
-                    return cleanResponse
+            // 3. Anti-DPI domain A query: resolve via DoH (+ RAM cache) to bypass mobile UDP:53 hijacking
+            if (isAntiDpi && parsed.qtype == DnsPacketCodec.TYPE_A) {
+                val cleanIps = resolveCleanIpv4(parsed.qname)
+                if (!cleanIps.isNullOrEmpty()) {
+                    return DnsPacketCodec.buildAResponse(parsed, cleanIps, ttlSeconds = 120)
+                }
+                val udpClean = queryCleanDns(queryData, queryLength)
+                if (udpClean != null) {
+                    return udpClean
                 }
             }
         }
 
-        // 3. Domain not in SmartHosts/AntiDPI: forward to upstream system DNS
+        // 4. Domain not in SmartHosts/AntiDPI: forward to upstream system DNS
         val resp = forwardToUpstreamDns(context, queryData, queryLength)
         if (resp != null) {
             return resp
@@ -154,6 +205,36 @@ object SmartHostsDnsRelay {
 
         // Fallback to clean DNS if operator DNS is unreachable/times out
         return queryCleanDns(queryData, queryLength)
+    }
+
+    private fun resolveCleanIpv4(qname: String): List<String>? {
+        val now = System.currentTimeMillis()
+        antiDpiIpCache[qname]?.let { cached ->
+            if (cached.expiresAtMs > now) {
+                return cached.ips
+            }
+            antiDpiIpCache.remove(qname)
+        }
+
+        for (resolver in dohResolvers) {
+            try {
+                val addrs = resolver.lookup(qname)
+                    .filterIsInstance<Inet4Address>()
+                    .mapNotNull { it.hostAddress }
+                    .filter { it != "0.0.0.0" && !it.startsWith("127.") }
+                    .distinct()
+                if (addrs.isNotEmpty()) {
+                    if (antiDpiIpCache.size >= ANTI_DPI_CACHE_MAX_SIZE) {
+                        antiDpiIpCache.clear()
+                    }
+                    antiDpiIpCache[qname] = CachedIpv4Entry(addrs, now + ANTI_DPI_CACHE_TTL_MS)
+                    return addrs
+                }
+            } catch (_: Throwable) {
+                // Try next DoH resolver
+            }
+        }
+        return null
     }
 
     /**

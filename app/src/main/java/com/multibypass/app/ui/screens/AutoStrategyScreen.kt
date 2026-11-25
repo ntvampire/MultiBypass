@@ -36,7 +36,7 @@ enum class StrategyFilterTab(val label: String) {
     INSTAGRAM("📷 Instagram")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AutoStrategyScreen(
     onNavigateBack: () -> Unit
@@ -135,14 +135,15 @@ fun AutoStrategyScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        FlowRow(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
                                 text = "Проверяемые сервисы:",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                                color = TextSecondary,
+                                modifier = Modifier.align(Alignment.CenterVertically)
                             )
                             PresetStrategies.defaultTestTargets.forEach { target ->
                                 Surface(
@@ -154,7 +155,7 @@ fun AutoStrategyScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
                             }
@@ -527,7 +528,7 @@ fun AutoStrategyScreen(
                                             val shortName = formatServiceName(sName)
                                             val sLat = res.serviceLatencies[sName]?.let { " ${it}мс" } ?: " ✓"
                                             val isHighlight = when (selectedFilter) {
-                                                StrategyFilterTab.YOUTUBE -> shortName == "YT" || shortName == "YTV"
+                                                StrategyFilterTab.YOUTUBE -> shortName == "YT" || shortName == "YTV" || shortName == "YTI"
                                                 StrategyFilterTab.INSTAGRAM -> shortName == "IG"
                                                 StrategyFilterTab.ALL -> true
                                             }
@@ -643,21 +644,15 @@ fun AutoStrategyScreen(
 }
 
 private fun StrategyTestResult.getYtLatency(): Long? {
-    val yt = serviceLatencies["YT"]
-    val ytv = serviceLatencies["YTV"]
-    return when {
-        yt != null && ytv != null -> (yt + ytv) / 2
-        yt != null -> yt
-        ytv != null -> ytv
-        else -> null
-    }
+    val lats = listOfNotNull(serviceLatencies["YT"], serviceLatencies["YTV"], serviceLatencies["YTI"])
+    return if (lats.isNotEmpty()) lats.average().toLong() else null
 }
 
 private fun StrategyTestResult.hasYt(): Boolean =
-    serviceLatencies.containsKey("YT") || serviceLatencies.containsKey("YTV")
+    serviceLatencies.containsKey("YT") || serviceLatencies.containsKey("YTV") || serviceLatencies.containsKey("YTI")
 
 private fun StrategyTestResult.hasFullYt(): Boolean =
-    serviceLatencies.containsKey("YT") && serviceLatencies.containsKey("YTV")
+    serviceLatencies.containsKey("YT") && serviceLatencies.containsKey("YTV") && serviceLatencies.containsKey("YTI")
 
 private fun StrategyTestResult.getIgLatency(): Long? = serviceLatencies["IG"]
 
@@ -666,6 +661,7 @@ private fun StrategyTestResult.hasIg(): Boolean = serviceLatencies.containsKey("
 private fun formatServiceName(name: String): String = when (name.trim().lowercase()) {
     "youtube", "yt" -> "YT"
     "youtube video", "ytv" -> "YTV"
+    "youtube img", "youtube preview", "yti" -> "YTI"
     "instagram", "ig" -> "IG"
     "facebook", "fb" -> "FB"
     else -> name

@@ -1,13 +1,16 @@
 package com.multibypass.app.core.byedpi
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import com.multibypass.app.core.vpn.MultiBypassVpnService
@@ -91,6 +94,7 @@ object PresetStrategies {
     val defaultTestTargets = listOf(
         TestTarget("YT", "https://www.youtube.com/generate_204"),
         TestTarget("YTV", "https://redirector.googlevideo.com/generate_204"),
+        TestTarget("YTI", "https://i.ytimg.com/vi/aqz-KE-bpKQ/default.jpg"),
         TestTarget("IG", "https://www.instagram.com")
     )
 
@@ -215,6 +219,15 @@ class StrategyTester private constructor(private val context: Context) {
 
             val notificationManager = NotificationManagerCompat.from(context)
             val hasNotifPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            val openAutoStrategyIntent = PendingIntent.getActivity(
+                context,
+                NOTIF_ID_TESTING,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(MainActivity.EXTRA_NAVIGATE_TO, MainActivity.DEST_AUTO_STRATEGY)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
             fun updateProgressNotification(current: Int, total: Int, bestLatency: Long?) {
                 if (!hasNotifPermission) return
@@ -224,6 +237,7 @@ class StrategyTester private constructor(private val context: Context) {
                     .setSmallIcon(R.drawable.ic_stat_vpn)
                     .setContentTitle(title)
                     .setContentText(text)
+                    .setContentIntent(openAutoStrategyIntent)
                     .setProgress(total, current, false)
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setOngoing(true)
