@@ -39,7 +39,7 @@
 - `core/tgproxy/TelegramProxyService.kt` & `NativeTgProxy.kt` — управление Rust-демоном `libtgwsproxy.so` (порт `1443`), обновление пула CF-доменов (`cfproxy_domains.txt`), диплинк `tg://proxy` для 18+ клиентов Telegram.
 - `core/watchdog/ServiceWatchdog.kt` — контроль живучести туннеля и прокси (приостанавливается на время автоподбора).
 - `core/lists/ListUpdateManager.kt` — обновление списков с `ntvampire.github.io/MultiBypass` + GitHub Raw fallback + немедленная инвалидация кэшей DNS и ByeDPI.
-- `core/updater/AppUpdateManager.kt` & `InstallReceiver.kt` — проверка релизов GitHub, загрузка APK и тихая/сессионная установка через `PackageInstaller`.
+- `core/updater/AppUpdateManager.kt` — проверка релизов GitHub, загрузка APK с прогресс-уведомлением (клик открывает настройки) и стандартный запуск системного установщика через `FileProvider` + `Intent.ACTION_VIEW`.
 - `core/diagnostics/NetworkDiagnostics.kt` — комплексный «Сетевой доктор» (проверка DNS, CDN, превью YouTube, портов `1080`/`10800`/`1443`).
 - `core/tiles/` — плитки быстрых настроек Android (`VpnTileService`, `TelegramProxyTileService`).
 

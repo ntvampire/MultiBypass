@@ -4,17 +4,18 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import com.multibypass.app.BuildConfig
+import com.multibypass.app.MainActivity
 import com.multibypass.app.MultiBypassApplication
 import com.multibypass.app.R
 import kotlinx.coroutines.*
@@ -160,10 +161,20 @@ object AppUpdateManager {
 
         val notificationManager = NotificationManagerCompat.from(context)
         val notifId = 1002
+        val openSettingsIntent = PendingIntent.getActivity(
+            context,
+            notifId,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_NAVIGATE_TO, MainActivity.DEST_SETTINGS)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notifBuilder = NotificationCompat.Builder(context, MultiBypassApplication.UPDATE_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText("Загрузка обновления...")
+            .setContentIntent(openSettingsIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -215,13 +226,11 @@ object AppUpdateManager {
                 }
             }
 
-            _downloadProgress.value = 100
-            pendingInstallApk = apkFile
+            _downloadProgress.value = null
             installApk(context, apkFile, notificationManager, notifId)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to download update APK", e)
             _downloadProgress.value = null
-            pendingInstallApk = null
             notificationManager.cancel(notifId)
         } finally {
             connection?.disconnect()
@@ -233,23 +242,9 @@ object AppUpdateManager {
         }
     }
 
-    @Volatile
-    private var pendingInstallApk: File? = null
-
-    fun checkAndInstallPendingApk(context: Context): Boolean {
-        val file = pendingInstallApk ?: File(context.cacheDir, "update.apk").takeIf { it.exists() && _downloadProgress.value == 100 }
-        if (file != null && file.exists()) {
-            if (installViaPackageInstaller(context, file)) {
-                pendingInstallApk = null
-                return true
-            }
-            fallbackInstall(context, file)
-            pendingInstallApk = null
-            return true
-        }
-        return false
-    }
-
+    /**
+     * Запускает стандартный системный установщик APK через FileProvider и ACTION_VIEW.
+     */
     private fun installApk(
         context: Context,
         file: File,
@@ -257,84 +252,11 @@ object AppUpdateManager {
         notifId: Int
     ) {
         if (!file.exists()) return
-
-        // 1. Try modern PackageInstaller session (avoids Play Protect unverified warning & biometric gate)
-        if (installViaPackageInstaller(context, file)) {
-            Log.i(TAG, "Install session committed via PackageInstaller")
-            pendingInstallApk = null
-            notificationManager.cancel(notifId)
-            return
-        }
-
-        // 2. Fallback to ACTION_VIEW if PackageInstaller fails
-        fallbackInstall(context, file, notificationManager, notifId)
-    }
-
-    fun installViaPackageInstaller(context: Context, file: File): Boolean {
-        var sessionId = -1
-        val packageInstaller = context.packageManager.packageInstaller
-        try {
-            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-                setAppPackageName(context.packageName)
-                setSize(file.length())
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE)
-                }
-            }
-
-            sessionId = packageInstaller.createSession(params)
-            val session = packageInstaller.openSession(sessionId)
-
-            session.openWrite("base.apk", 0, file.length()).use { outStream ->
-                file.inputStream().use { inStream ->
-                    inStream.copyTo(outStream)
-                }
-                session.fsync(outStream)
-            }
-
-            val callbackIntent = Intent(context, InstallReceiver::class.java).apply {
-                action = InstallReceiver.ACTION_INSTALL_STATUS
-                setPackage(context.packageName)
-            }
-
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                sessionId,
-                callbackIntent,
-                flags
-            )
-
-            session.commit(pendingIntent.intentSender)
-            session.close()
-            return true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to install via PackageInstaller, falling back", e)
-            if (sessionId != -1) {
-                try {
-                    packageInstaller.abandonSession(sessionId)
-                } catch (_: Exception) {}
-            }
-            return false
-        }
-    }
-
-    fun fallbackInstall(
-        context: Context,
-        file: File? = null,
-        notificationManager: NotificationManagerCompat? = null,
-        notifId: Int = 1002
-    ) {
-        val targetFile = file ?: pendingInstallApk ?: File(context.cacheDir, "update.apk").takeIf { it.exists() } ?: return
         try {
             val contentUri: Uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.provider",
-                targetFile
+                file
             )
 
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -342,9 +264,18 @@ object AppUpdateManager {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
 
+            val resInfoList = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resInfoList) {
+                context.grantUriPermission(
+                    resolveInfo.activityInfo.packageName,
+                    contentUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
             val pendingIntent = PendingIntent.getActivity(
                 context,
-                0,
+                notifId,
                 installIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -359,15 +290,22 @@ object AppUpdateManager {
                 .setContentIntent(pendingIntent)
                 .build()
 
-            val nm = notificationManager ?: NotificationManagerCompat.from(context)
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                nm.notify(notifId, completeNotif)
+                notificationManager.notify(notifId, completeNotif)
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+                val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(settingsIntent)
+                return
             }
 
             context.startActivity(installIntent)
-            pendingInstallApk = null
         } catch (e: Exception) {
-            Log.e(TAG, "Failed fallback install", e)
+            Log.e(TAG, "Failed to start standard APK installer", e)
         }
     }
 

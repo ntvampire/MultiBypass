@@ -1,7 +1,10 @@
 # 4. План разработки и дорожная карта (Roadmap)
 
-## 4.1. Текущая итерация (выпуск v3.3.1, build 48)
+## 4.1. Текущая итерация (выпуск v3.3.2, build 49)
 | Статус | Задача | Описание / Компоненты |
+| :--- | :--- | :--- |
+| ✅ Выполнено | Возврат стандартного установщика APK | Удалены `PackageInstaller.Session`, `InstallReceiver` и триггер `onResume`; установлена классическая схема `FileProvider` + `ACTION_VIEW` (`AppUpdateManager.kt`). |
+| ✅ Выполнено | Переход в Настройки по клику на уведомление загрузки | Клик по уведомлению прогресса скачивания открывает `Screen.SETTINGS` (`AppUpdateManager.kt`, `MainActivity.kt`). |
 | :--- | :--- | :--- |
 | ✅ Выполнено | Автономный генератор SmartHosts | Прямой сбор в `scripts/update_domains.py` из `GeoHide EU`, `ImMALWARE`, `AstraCat` и `seeds/seeds_geoblock.txt`. |
 | ✅ Выполнено | Фикс вёрстки даты в связке автоподбора | Фиксация `Modifier.weight(1f)` + `softWrap = false` в `AutoStrategyScreen.kt`. |

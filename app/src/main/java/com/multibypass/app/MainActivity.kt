@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_NAVIGATE_TO = "navigate_to"
         const val DEST_AUTO_STRATEGY = "auto_strategy"
+        const val DEST_SETTINGS = "settings"
     }
 
     private var currentScreen by mutableStateOf(Screen.MAIN)
@@ -102,14 +103,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNavigationIntent(intent: Intent?) {
-        if (intent?.getStringExtra(EXTRA_NAVIGATE_TO) == DEST_AUTO_STRATEGY) {
-            currentScreen = Screen.AUTO_STRATEGY
+        when (intent?.getStringExtra(EXTRA_NAVIGATE_TO)) {
+            DEST_AUTO_STRATEGY -> currentScreen = Screen.AUTO_STRATEGY
+            DEST_SETTINGS -> currentScreen = Screen.SETTINGS
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        com.multibypass.app.core.updater.AppUpdateManager.checkAndInstallPendingApk(this)
     }
 
     private fun requestVpnPermission() {
