@@ -1,6 +1,6 @@
 {
-  "version": 36,
-  "updated_at": "2026-11-24T15:13:11Z",
+  "version": 37,
+  "updated_at": "2026-11-25T14:52:15Z",
   "antidpi": {
     "count": 69,
     "sha256": "8706a19babeb8068f74ca08d8a4824c143f28451e5a832d2c49effa5122d5d90",
@@ -12,8 +12,8 @@
     "filename": "strategies.txt"
   },
   "smarthosts": {
-    "count": 1181,
-    "sha256": "cb1a0cee022ef82258ff479976e7e6b838fcc4e783125702995db0a4fed527df",
+    "count": 1155,
+    "sha256": "bbff1d7790496cf7efaae984aeee1d645e75491178c78eb18f7f9e9ec0507251",
     "filename": "smart-no-crutch.hosts"
   }
 }
