@@ -61,7 +61,7 @@ data class AntiDpiGroupConfig(
 data class TelegramProxyConfig(
     val enabled: Boolean = true,
     val port: Int = 1443,
-    val secret: String = "112233445566778899aabbccddeeff00",
+    val secret: String = "",
     val autoStartWithVpn: Boolean = true
 )
 
@@ -111,5 +111,38 @@ val ANTIDPI_PACKAGES = setOf(
     "org.thoughtcrime.securesms",
     "com.zhiliaoapp.musically"
 )
+
+val META_ANTIDPI_ROOT_DOMAINS = setOf(
+    "instagram.com",
+    "cdninstagram.com",
+    "i.instagram.com",
+    "graph.instagram.com",
+    "gateway.instagram.com",
+    "facebook.com",
+    "fbcdn.net",
+    "threads.net",
+    "meta.com"
+)
+
+val CORE_ANTIDPI_ROOT_DOMAINS = setOf(
+    "googlevideo.com",
+    "youtube.com",
+    "ytimg.com",
+    "ggpht.com",
+    "googleusercontent.com",
+    "gvt1.com",
+    "gvt2.com",
+    "youtu.be",
+    "discord.com",
+    "discord.gg",
+    "discordapp.com",
+    "discordapp.net",
+    "discordcdn.com",
+    "discord.media",
+    "twitter.com",
+    "x.com",
+    "twimg.com",
+    "t.co"
+) + META_ANTIDPI_ROOT_DOMAINS
 
 val POPULAR_PACKAGES = GEOBLOCK_PACKAGES + ANTIDPI_PACKAGES

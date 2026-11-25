@@ -1,6 +1,7 @@
 package com.multibypass.app.ui.screens
 
-import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import com.multibypass.app.core.smarthosts.SmartHostsManager
 import com.multibypass.app.core.tgproxy.TelegramProxyController
 import com.multibypass.app.core.tgproxy.TelegramProxyService
+import com.multibypass.app.core.updater.AppUpdateManager
+import com.multibypass.app.core.updater.UpdateInfo
 import com.multibypass.app.core.vpn.MultiBypassVpnService
 import com.multibypass.app.data.model.VpnStatus
 import com.multibypass.app.data.repository.SettingsRepository
@@ -51,6 +54,14 @@ fun MainScreen(
     val tgConfig by repository.tgConfig.collectAsState()
 
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
+    var migrationUpdate by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    LaunchedEffect(Unit) {
+        val info = AppUpdateManager.checkForUpdates()
+        if (info != null && info.isNewer && info.requiresCleanReinstall) {
+            migrationUpdate = info
+        }
+    }
 
     val isConnected = vpnStatus == VpnStatus.CONNECTED
     val isConnecting = vpnStatus == VpnStatus.CONNECTING
@@ -113,6 +124,47 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
+
+            migrationUpdate?.let { info ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    border = BorderStroke(1.dp, AccentOrange)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Доступна версия ${info.tagName} с новой подписью",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentOrange
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Актуальная версия требует переустановки начисто: удалите текущее приложение и установите новый APK.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                val targetUrl = info.releaseHtmlUrl.ifBlank { info.downloadUrl }
+                                if (targetUrl.isNotBlank()) {
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)))
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+                        ) {
+                            Text("Скачать новую версию на GitHub", color = Color.Black, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Main Connect Button
             Box(

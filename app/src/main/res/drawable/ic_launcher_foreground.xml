@@ -4,39 +4,43 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Top-Left Ribbon: Material Cyan -->
+    <!-- Symmetrical 4-way bypass ribbons in strict flat AccentBlue (#29B6F6) -->
+    <!-- Top-Left -->
     <path
-        android:fillColor="#00E5FF"
+        android:fillColor="#29B6F6"
         android:pathData="M 48,22 L 54,22 L 54,54 L 22,54 L 22,48 C 39,46 46,39 48,22 Z" />
 
-    <!-- Bottom-Right Ribbon: Material Purple -->
+    <!-- Top-Right -->
     <path
-        android:fillColor="#7C4DFF"
-        android:pathData="M 60,86 L 54,86 L 54,54 L 86,54 L 86,60 C 69,62 62,69 60,86 Z" />
-
-    <!-- Top-Right Ribbon: Material Royal Blue -->
-    <path
-        android:fillColor="#2979FF"
+        android:fillColor="#29B6F6"
         android:pathData="M 54,22 L 60,22 C 62,39 69,46 86,48 L 86,54 L 54,54 Z" />
 
-    <!-- Bottom-Left Ribbon: Material Azure Blue -->
+    <!-- Bottom-Left -->
     <path
-        android:fillColor="#00B0FF"
+        android:fillColor="#29B6F6"
         android:pathData="M 22,54 L 22,60 C 39,62 46,69 48,86 L 54,86 L 54,54 Z" />
 
-    <!-- Dark Contrast Shield Border Outline -->
+    <!-- Bottom-Right -->
     <path
-        android:fillColor="#0A1128"
-        android:pathData="M 54,34 L 70,40 L 70,55 C 70,67 60,74 54,77 C 48,74 38,67 38,55 L 38,40 Z" />
+        android:fillColor="#29B6F6"
+        android:pathData="M 60,86 L 54,86 L 54,54 L 86,54 L 86,60 C 69,62 62,69 60,86 Z" />
 
-    <!-- Shield Left Half: Flat Cyan -->
+    <!-- Clean dark cutout border separating ribbons from central shield -->
     <path
-        android:fillColor="#00E5FF"
-        android:pathData="M 54,37 L 41,42 L 41,54 C 41,65 49,71 54,74 Z" />
+        android:fillColor="#121417"
+        android:pathData="M 54,32 L 72,39 L 72,55 C 72,68 61,76 54,79 C 47,76 36,68 36,55 L 36,39 Z" />
 
-    <!-- Shield Right Half: Flat Royal Blue -->
+    <!-- Strict flat solid Emerald Shield (#2ECC71) -->
     <path
-        android:fillColor="#2979FF"
-        android:pathData="M 54,37 L 67,42 L 67,54 C 67,65 59,71 54,74 Z" />
+        android:fillColor="#2ECC71"
+        android:pathData="M 54,36 L 68,41.5 L 68,54.5 C 68,65.5 59.5,72 54,74.5 C 48.5,72 40,65.5 40,54.5 L 40,41.5 Z" />
+
+    <!-- Minimalist flat geometric bypass chevron cutout inside shield -->
+    <path
+        android:fillColor="#121417"
+        android:pathData="M 54,44.5 L 61.5,52 L 58.2,55.3 L 54,51.1 L 49.8,55.3 L 46.5,52 Z" />
+    <path
+        android:fillColor="#121417"
+        android:pathData="M 54,53.5 L 61.5,61 L 58.2,64.3 L 54,60.1 L 49.8,64.3 L 46.5,61 Z" />
 
 </vector>

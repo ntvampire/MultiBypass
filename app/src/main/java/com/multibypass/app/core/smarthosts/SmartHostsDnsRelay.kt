@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.util.Log
 import com.multibypass.app.core.vpn.MultiBypassVpnService
+import com.multibypass.app.data.model.CORE_ANTIDPI_ROOT_DOMAINS
+import com.multibypass.app.data.repository.SettingsRepository
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
@@ -31,7 +33,6 @@ object SmartHostsDnsRelay {
     private const val DNS_TIMEOUT_MS = 2500
     private const val ANTI_DPI_CACHE_TTL_MS = 120_000L
     private const val ANTI_DPI_CACHE_MAX_SIZE = 512
-    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "9.9.9.9", "77.88.8.8", "1.1.1.1")
 
     private data class CachedIpv4Entry(
         val ips: List<String>,
@@ -70,32 +71,7 @@ object SmartHostsDnsRelay {
         }
     }
 
-    private val CORE_ANTIDPI_ROOT_DOMAINS = setOf(
-        "googlevideo.com",
-        "youtube.com",
-        "ytimg.com",
-        "ggpht.com",
-        "googleusercontent.com",
-        "gvt1.com",
-        "gvt2.com",
-        "youtu.be",
-        "instagram.com",
-        "cdninstagram.com",
-        "facebook.com",
-        "fbcdn.net",
-        "threads.net",
-        "meta.com",
-        "discord.com",
-        "discord.gg",
-        "discordapp.com",
-        "discordapp.net",
-        "discordcdn.com",
-        "discord.media",
-        "twitter.com",
-        "x.com",
-        "twimg.com",
-        "t.co"
-    )
+    private val CLEAN_DNS_IPS = listOf("8.8.8.8", "9.9.9.9", "77.88.8.8", "1.1.1.1")
 
     @Volatile
     private var cachedUpstreamDns: String? = null
@@ -110,7 +86,7 @@ object SmartHostsDnsRelay {
 
     private fun getAntiDpiDomains(context: Context): Set<String> {
         antiDpiDomainsCache?.let { return it }
-        val set = try {
+        val fileDomains = try {
             val srcFile = java.io.File(context.filesDir, "domains_antidpi_clean.txt")
             val content = if (srcFile.exists() && srcFile.length() > 0) {
                 srcFile.readText()
@@ -122,10 +98,17 @@ object SmartHostsDnsRelay {
             content.lines()
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() && !it.startsWith("#") }
-                .toSet()
         } catch (_: Exception) {
-            emptySet()
+            emptyList()
         }
+        val userDomains = try {
+            SettingsRepository.getInstance(context).antiDpiConfig.value.domains
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val set = (fileDomains + userDomains).toSet()
         antiDpiDomainsCache = set
         return set
     }
@@ -142,6 +125,9 @@ object SmartHostsDnsRelay {
     fun refreshUpstreamDns(context: Context) {
         cachedUpstreamDns = null
         antiDpiIpCache.clear()
+        try {
+            dohBaseClient.connectionPool.evictAll()
+        } catch (_: Throwable) {}
         val newDns = getUpstreamDnsIp(context)
         cachedUpstreamDns = newDns
         Log.i(TAG, "Upstream DNS refreshed to: $newDns")
@@ -159,8 +145,13 @@ object SmartHostsDnsRelay {
         val parsed = DnsPacketCodec.parseQuery(queryData, queryLength)
 
         if (parsed != null) {
+            val smartHostsEnabled = try {
+                SettingsRepository.getInstance(context).smartHostsConfig.value.enabled
+            } catch (_: Exception) {
+                true
+            }
             val isAntiDpi = isAntiDpiDomain(context, parsed.qname)
-            val isGeoblocked = SmartHostsManager.isGeoblocked(parsed.qname)
+            val isGeoblocked = smartHostsEnabled && SmartHostsManager.isGeoblocked(parsed.qname)
 
             // 0. Suppress DNS Type 65 (HTTPS / SVCB) for Anti-DPI & Geoblocked domains
             // Forces Android Cronet/Chrome/YouTube/Instagram onto TCP TLS 1.3 without waiting for QUIC UDP timeouts.
@@ -175,8 +166,8 @@ object SmartHostsDnsRelay {
                 return DnsPacketCodec.buildNoDataResponse(parsed)
             }
 
-            // 2. Check SmartHosts for geoblocked domain
-            if (parsed.qtype == DnsPacketCodec.TYPE_A) {
+            // 2. Check SmartHosts for geoblocked domain (only when enabled)
+            if (smartHostsEnabled && parsed.qtype == DnsPacketCodec.TYPE_A) {
                 val mappedIps = SmartHostsManager.resolve(parsed.qname)
                 if (!mappedIps.isNullOrEmpty()) {
                     Log.d(TAG, "SmartHosts HIT: ${parsed.qname} -> ${mappedIps.first()} (instant 0 ms)")

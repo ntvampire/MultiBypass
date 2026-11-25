@@ -18,11 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.multibypass.app.BuildConfig
 import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.core.updater.UpdateInfo
@@ -399,22 +399,45 @@ fun SettingsScreen(
     }
 
     if (showUpdateDialog && updateInfo != null) {
+        val info = updateInfo!!
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
-            title = { Text("Доступно обновление ${updateInfo!!.tagName}") },
+            title = {
+                Text(
+                    if (info.requiresCleanReinstall) "Требуется переустановка (${info.tagName})"
+                    else "Доступно обновление ${info.tagName}"
+                )
+            },
             text = {
-                Column {
-                    Text(updateInfo!!.releaseNotes, style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (info.requiresCleanReinstall) {
+                        Text(
+                            text = "В версии ${info.tagName} обновлена подпись разработчика. Для перехода удалите текущую версию приложения и установите новый APK начисто.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AccentOrange
+                        )
+                    }
+                    Text(info.releaseNotes, style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         showUpdateDialog = false
-                        AppUpdateManager.downloadAndInstallApk(context, updateInfo!!.downloadUrl)
+                        if (info.requiresCleanReinstall) {
+                            val targetUrl = info.releaseHtmlUrl.ifBlank { info.downloadUrl }
+                            if (targetUrl.isNotBlank()) {
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)))
+                                } catch (_: Exception) {}
+                            }
+                        } else {
+                            AppUpdateManager.downloadAndInstallApk(context, info.downloadUrl)
+                        }
                     }
                 ) {
-                    Text("Скачать и установить")
+                    Text(if (info.requiresCleanReinstall) "Открыть релиз и скачать" else "Скачать и установить")
                 }
             },
             dismissButton = {

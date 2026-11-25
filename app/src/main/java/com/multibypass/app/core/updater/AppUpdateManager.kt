@@ -33,7 +33,9 @@ data class UpdateInfo(
     val tagName: String,
     val downloadUrl: String,
     val releaseNotes: String,
-    val isNewer: Boolean
+    val isNewer: Boolean,
+    val releaseHtmlUrl: String = "",
+    val requiresCleanReinstall: Boolean = false
 )
 
 object AppUpdateManager {
@@ -81,6 +83,7 @@ object AppUpdateManager {
 
                 val tagName = targetRelease.optString("tag_name", "")
                 val releaseNotes = targetRelease.optString("body", "Новый релиз MultiBypass")
+                val releaseHtmlUrl = targetRelease.optString("html_url", "https://github.com/$GITHUB_REPO/releases/latest")
                 val assets = targetRelease.optJSONArray("assets")
 
                 var apkDownloadUrl = ""
@@ -121,11 +124,15 @@ object AppUpdateManager {
                     }
                 }
 
+                val needsReinstall = requiresCleanReinstallUpgrade(tagName, BuildConfig.VERSION_NAME, releaseNotes)
+
                 UpdateInfo(
                     tagName = tagName,
                     downloadUrl = apkDownloadUrl,
                     releaseNotes = releaseNotes,
-                    isNewer = true
+                    isNewer = true,
+                    releaseHtmlUrl = releaseHtmlUrl,
+                    requiresCleanReinstall = needsReinstall
                 )
             } else {
                 Log.w(TAG, "Update check failed with code: ${connection.responseCode}")
@@ -191,6 +198,10 @@ object AppUpdateManager {
                 connectTimeout = 30000
                 readTimeout = 30000
                 instanceFollowRedirects = true
+            }
+
+            if (connection.responseCode !in 200..299) {
+                throw java.io.IOException("Download failed with HTTP ${connection.responseCode}")
             }
 
             val fileLength = connection.contentLength
@@ -309,7 +320,22 @@ object AppUpdateManager {
         }
     }
 
-    private fun isVersionNewer(remoteTag: String, currentVersion: String): Boolean {
+    internal fun requiresCleanReinstallUpgrade(
+        remoteTag: String,
+        currentVersion: String,
+        releaseNotes: String
+    ): Boolean {
+        if (releaseNotes.contains("[NEW_SIGNATURE]", ignoreCase = true) ||
+            releaseNotes.contains("новая подпись", ignoreCase = true)
+        ) {
+            return true
+        }
+        val remoteMajor = remoteTag.removePrefix("v").trim().substringBefore(".").toIntOrNull() ?: return false
+        val currentMajor = currentVersion.removePrefix("v").trim().substringBefore(".").toIntOrNull() ?: return false
+        return currentMajor < 4 && remoteMajor >= 4
+    }
+
+    internal fun isVersionNewer(remoteTag: String, currentVersion: String): Boolean {
         val cleanRemote = remoteTag.removePrefix("v").trim()
         val cleanCurrent = currentVersion.removePrefix("v").trim()
 

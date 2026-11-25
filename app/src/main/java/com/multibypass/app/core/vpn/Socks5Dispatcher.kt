@@ -439,7 +439,10 @@ object Socks5Dispatcher {
                     try { client.shutdownOutput() } catch (_: Exception) {}
                 }
 
-                uploadJob.join()
+                withTimeoutOrNull(400L) {
+                    uploadJob.join()
+                }
+                uploadJob.cancel()
             }
 
         } catch (_: Exception) {

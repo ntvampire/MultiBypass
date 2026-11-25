@@ -14,8 +14,8 @@ android {
         applicationId = "com.multibypass.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 49
-        versionName = "3.3.2"
+        versionCode = 50
+        versionName = "3.3.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -45,7 +45,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

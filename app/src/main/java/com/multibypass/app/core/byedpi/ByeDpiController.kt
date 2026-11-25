@@ -1,6 +1,9 @@
 package com.multibypass.app.core.byedpi
 
 import android.util.Log
+import com.multibypass.app.data.model.CORE_ANTIDPI_ROOT_DOMAINS
+import com.multibypass.app.data.model.META_ANTIDPI_ROOT_DOMAINS
+import com.multibypass.app.data.repository.SettingsRepository
 import io.github.romanvht.byedpi.core.ByeDpiProxy
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,17 +25,7 @@ object ByeDpiController {
     @Volatile
     var generalHostsFilePath: String? = null
 
-    val META_DOMAINS = setOf(
-        "instagram.com",
-        "cdninstagram.com",
-        "i.instagram.com",
-        "graph.instagram.com",
-        "gateway.instagram.com",
-        "facebook.com",
-        "fbcdn.net",
-        "threads.net",
-        "meta.com"
-    )
+    val META_DOMAINS = META_ANTIDPI_ROOT_DOMAINS
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
@@ -52,36 +45,17 @@ object ByeDpiController {
             } else {
                 context.assets.open("domains_antidpi.txt").bufferedReader().use { it.readText() }
             }
-            val coreRoots = setOf(
-                "googlevideo.com",
-                "youtube.com",
-                "ytimg.com",
-                "ggpht.com",
-                "googleusercontent.com",
-                "gvt1.com",
-                "gvt2.com",
-                "youtu.be",
-                "instagram.com",
-                "cdninstagram.com",
-                "facebook.com",
-                "fbcdn.net",
-                "threads.net",
-                "meta.com",
-                "discord.com",
-                "discord.gg",
-                "discordapp.com",
-                "discordapp.net",
-                "discordcdn.com",
-                "discord.media",
-                "twitter.com",
-                "x.com",
-                "twimg.com",
-                "t.co"
-            )
             val parsedLines = content.lines()
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() && !it.startsWith("#") }
-            val cleanDomains = (parsedLines + coreRoots).distinct()
+            val userDomains = try {
+                SettingsRepository.getInstance(context).antiDpiConfig.value.domains
+                    .map { it.trim().lowercase() }
+                    .filter { it.isNotBlank() }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val cleanDomains = (parsedLines + userDomains + CORE_ANTIDPI_ROOT_DOMAINS).distinct()
 
             targetFile.writeText(cleanDomains.joinToString("\n"))
             hostsFilePath = targetFile.absolutePath
@@ -117,27 +91,16 @@ object ByeDpiController {
             stopLocked()
             delay(150)
 
-            fun sanitize(s: String): String {
-                val trimmed = s.trim()
-                return if (trimmed.contains("{sni}")) {
-                    trimmed.replace("{sni}", "www.google.com")
-                } else {
-                    trimmed
-                }
-            }
-
-            val fullCmd = if (useHosts && separateProfiles && !metaHostsFilePath.isNullOrBlank() && !generalHostsFilePath.isNullOrBlank()) {
-                val sMeta = sanitize(instagramStrategy)
-                val sGeneral = sanitize(strategy)
-                // -A n switches to the next group strictly by --hosts match without auto-failover triggers
-                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$metaHostsFilePath\" $sMeta -A n --hosts \"$generalHostsFilePath\" $sGeneral"
-            } else if (useHosts && !hostsFilePath.isNullOrBlank()) {
-                val s = sanitize(strategy)
-                "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$hostsFilePath\" $s"
-            } else {
-                val s = sanitize(strategy)
-                "ciadpi -i 127.0.0.1 -p $port -J $s"
-            }
+            val fullCmd = buildStartCommand(
+                strategy = strategy,
+                instagramStrategy = instagramStrategy,
+                separateProfiles = separateProfiles,
+                port = port,
+                useHosts = useHosts,
+                hostsPath = hostsFilePath,
+                metaHostsPath = metaHostsFilePath,
+                generalHostsPath = generalHostsFilePath
+            )
 
             val args = parseArgs(fullCmd)
 
@@ -194,7 +157,40 @@ object ByeDpiController {
         }
     }
 
-    private fun parseArgs(cmd: String): Array<String> {
+    internal fun buildStartCommand(
+        strategy: String,
+        instagramStrategy: String = "-s2 -a1",
+        separateProfiles: Boolean = true,
+        port: Int = DEFAULT_PORT,
+        useHosts: Boolean = true,
+        hostsPath: String? = hostsFilePath,
+        metaHostsPath: String? = metaHostsFilePath,
+        generalHostsPath: String? = generalHostsFilePath
+    ): String {
+        fun sanitize(s: String): String {
+            val trimmed = s.trim()
+            return if (trimmed.contains("{sni}")) {
+                trimmed.replace("{sni}", "www.google.com")
+            } else {
+                trimmed
+            }
+        }
+
+        return if (useHosts && separateProfiles && !metaHostsPath.isNullOrBlank() && !generalHostsPath.isNullOrBlank()) {
+            val sMeta = sanitize(instagramStrategy)
+            val sGeneral = sanitize(strategy)
+            // -A n switches to the next group strictly by --hosts match without auto-failover triggers
+            "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$metaHostsPath\" $sMeta -A n --hosts \"$generalHostsPath\" $sGeneral"
+        } else if (useHosts && !hostsPath.isNullOrBlank()) {
+            val s = sanitize(strategy)
+            "ciadpi -i 127.0.0.1 -p $port -J --hosts \"$hostsPath\" $s"
+        } else {
+            val s = sanitize(strategy)
+            "ciadpi -i 127.0.0.1 -p $port -J $s"
+        }
+    }
+
+    internal fun parseArgs(cmd: String): Array<String> {
         val list = mutableListOf<String>()
         val regex = Regex("\"([^\"]*)\"|'([^']*)'|(\\S+)")
         regex.findAll(cmd).forEach { match ->

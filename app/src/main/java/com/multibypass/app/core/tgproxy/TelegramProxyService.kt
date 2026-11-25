@@ -192,7 +192,7 @@ class TelegramProxyService : Service() {
                             updateRunningState(true)
                             _isVerifiedRunning.value = true
                             updateNotification("Локальный MTProto прокси активен (127.0.0.1:$port)")
-                            Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:$port with secret $secret")
+                            Log.i(TAG, "Telegram WS Proxy started on 127.0.0.1:$port (secret=${secret.take(4)}...)")
                             startStatsUpdater()
                         }
                     }
@@ -235,7 +235,8 @@ class TelegramProxyService : Service() {
                         val active = extractStat(rawStats, "active=")
                         val up = extractStat(rawStats, "up=")
                         val down = extractStat(rawStats, "down=")
-                        val text = "127.0.0.1:1443 • Подключений: $active • ↓$down ↑$up"
+                        val port = SettingsRepository.getInstance(applicationContext).tgConfig.value.port
+                        val text = "127.0.0.1:$port • Подключений: $active • ↓$down ↑$up"
                         updateNotification(text)
                     }
                 } catch (e: Exception) {

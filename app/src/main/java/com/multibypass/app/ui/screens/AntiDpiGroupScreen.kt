@@ -58,6 +58,10 @@ fun AntiDpiGroupScreen(
     BackHandler(onBack = onNavigateBack)
 
     var newDomainInput by remember { mutableStateOf("") }
+    var strategyInput by remember(antiDpiConfig.strategy) { mutableStateOf(antiDpiConfig.strategy) }
+    var igStrategyInput by remember(antiDpiConfig.instagramStrategy) { mutableStateOf(antiDpiConfig.instagramStrategy) }
+    val hasStrategyChanges = strategyInput.trim() != antiDpiConfig.strategy.trim() ||
+        igStrategyInput.trim() != antiDpiConfig.instagramStrategy.trim()
     var showStrategyDialog by remember { mutableStateOf(false) }
     var presetTargetIsInstagram by remember { mutableStateOf(false) }
 
@@ -101,22 +105,11 @@ fun AntiDpiGroupScreen(
                     Text("YouTube, Discord и общие сервисы:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
-                        value = antiDpiConfig.strategy,
-                        onValueChange = {
-                            val newCfg = antiDpiConfig.copy(strategy = it)
-                            repository.updateAntiDpiConfig(newCfg)
-                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
-                                scope.launch {
-                                    ByeDpiController.start(
-                                        strategy = newCfg.strategy,
-                                        instagramStrategy = newCfg.instagramStrategy,
-                                        separateProfiles = newCfg.separateProfiles
-                                    )
-                                }
-                            }
-                        },
+                        value = strategyInput,
+                        onValueChange = { strategyInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -124,23 +117,41 @@ fun AntiDpiGroupScreen(
                     Text("Instagram и Meta (без disorder):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
-                        value = antiDpiConfig.instagramStrategy,
-                        onValueChange = {
-                            val newCfg = antiDpiConfig.copy(instagramStrategy = it)
-                            repository.updateAntiDpiConfig(newCfg)
-                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
-                                scope.launch {
-                                    ByeDpiController.start(
-                                        strategy = newCfg.strategy,
-                                        instagramStrategy = newCfg.instagramStrategy,
-                                        separateProfiles = newCfg.separateProfiles
-                                    )
-                                }
-                            }
-                        },
+                        value = igStrategyInput,
+                        onValueChange = { igStrategyInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
                     )
+
+                    if (hasStrategyChanges) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                val newCfg = antiDpiConfig.copy(
+                                    strategy = strategyInput.trim().ifBlank { antiDpiConfig.strategy },
+                                    instagramStrategy = igStrategyInput.trim().ifBlank { antiDpiConfig.instagramStrategy }
+                                )
+                                repository.updateAntiDpiConfig(newCfg)
+                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                    scope.launch {
+                                        ByeDpiController.start(
+                                            strategy = newCfg.strategy,
+                                            instagramStrategy = newCfg.instagramStrategy,
+                                            separateProfiles = newCfg.separateProfiles
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Применить стратегии")
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -393,6 +404,17 @@ fun AntiDpiGroupScreen(
                 TextButton(
                     onClick = {
                         repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = AntiDpiGroupConfig().domains))
+                        ByeDpiController.ensureHostsFile(context)
+                        com.multibypass.app.core.smarthosts.SmartHostsDnsRelay.clearAntiDpiCache()
+                        if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                            scope.launch {
+                                ByeDpiController.start(
+                                    strategy = antiDpiConfig.strategy,
+                                    instagramStrategy = antiDpiConfig.instagramStrategy,
+                                    separateProfiles = antiDpiConfig.separateProfiles
+                                )
+                            }
+                        }
                     }
                 ) {
                     Text("Сброс")
@@ -416,6 +438,17 @@ fun AntiDpiGroupScreen(
                         val trimmed = newDomainInput.trim().lowercase()
                         if (trimmed.isNotBlank() && !antiDpiConfig.domains.contains(trimmed)) {
                             repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = antiDpiConfig.domains + trimmed))
+                            ByeDpiController.ensureHostsFile(context)
+                            com.multibypass.app.core.smarthosts.SmartHostsDnsRelay.clearAntiDpiCache()
+                            if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                scope.launch {
+                                    ByeDpiController.start(
+                                        strategy = antiDpiConfig.strategy,
+                                        instagramStrategy = antiDpiConfig.instagramStrategy,
+                                        separateProfiles = antiDpiConfig.separateProfiles
+                                    )
+                                }
+                            }
                             newDomainInput = ""
                         }
                     },
@@ -446,6 +479,17 @@ fun AntiDpiGroupScreen(
                         IconButton(
                             onClick = {
                                 repository.updateAntiDpiConfig(antiDpiConfig.copy(domains = antiDpiConfig.domains - domain))
+                                ByeDpiController.ensureHostsFile(context)
+                                com.multibypass.app.core.smarthosts.SmartHostsDnsRelay.clearAntiDpiCache()
+                                if (MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED) {
+                                    scope.launch {
+                                        ByeDpiController.start(
+                                            strategy = antiDpiConfig.strategy,
+                                            instagramStrategy = antiDpiConfig.instagramStrategy,
+                                            separateProfiles = antiDpiConfig.separateProfiles
+                                        )
+                                    }
+                                }
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
@@ -498,7 +542,7 @@ fun AntiDpiGroupScreen(
                                 }
                                 .padding(vertical = 10.dp)
                         )
-                        Divider(color = DarkSurface)
+                        HorizontalDivider(color = DarkSurface)
                     }
                 }
             },
