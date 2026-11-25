@@ -1,8 +1,25 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+val signingStorePath: String? = System.getenv("SIGNING_KEYSTORE_PATH")
+    ?: localProps.getProperty("signing.storeFile")
+val signingStorePassword: String? = System.getenv("SIGNING_STORE_PASSWORD")
+    ?: localProps.getProperty("signing.storePassword")
+val signingKeyAlias: String? = System.getenv("SIGNING_KEY_ALIAS")
+    ?: localProps.getProperty("signing.keyAlias")
+val signingKeyPassword: String? = System.getenv("SIGNING_KEY_PASSWORD")
+    ?: localProps.getProperty("signing.keyPassword")
+val resolvedKeystoreFile = signingStorePath?.let { file(it) }?.takeIf { it.exists() }
 
 val supportedAbis = setOf("arm64-v8a", "armeabi-v7a")
 
@@ -14,8 +31,8 @@ android {
         applicationId = "com.multibypass.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 50
-        versionName = "3.3.3"
+        versionCode = 51
+        versionName = "4.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -30,16 +47,18 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("release.p12")
-            storePassword = "multibypass"
-            keyAlias = "multibypass"
-            keyPassword = "multibypass"
-            storeType = "PKCS12"
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
-            enableV4Signing = true
+        if (resolvedKeystoreFile != null && !signingStorePassword.isNullOrBlank() && !signingKeyAlias.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()) {
+            create("release") {
+                storeFile = resolvedKeystoreFile
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+                storeType = "PKCS12"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
         }
     }
 
@@ -47,7 +66,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -55,7 +74,6 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 

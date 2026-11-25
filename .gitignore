@@ -9,6 +9,10 @@ build/
 .cxx
 *.apk
 *.aab
+*.p12
+*.jks
+*.keystore
+keystore/
 temp_dl/
 scratch/
 .vscode/

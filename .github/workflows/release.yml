@@ -31,7 +31,17 @@ jobs:
       - name: Set executable permissions for gradlew
         run: chmod +x ./gradlew
 
+      - name: Decode Release Keystore
+        run: |
+          mkdir -p keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 --decode > keystore/multibypass-release.p12
+
       - name: Build with Gradle
+        env:
+          SIGNING_KEYSTORE_PATH: ${{ github.workspace }}/keystore/multibypass-release.p12
+          SIGNING_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Organize APKs for release
