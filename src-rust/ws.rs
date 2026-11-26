@@ -4,9 +4,8 @@ use crate::{ldebug};
 use base64::Engine;
 use byteorder::{BigEndian, ByteOrder};
 use rand::RngCore;
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
-use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{ClientConfig, RootCertStore};
+use rustls_pki_types::ServerName;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,66 +27,22 @@ pub const OP_PING: u8 = 0x9;
 pub const OP_PONG: u8 = 0xA;
 
 // ---------------------------------------------------------------------------
-// TLS config: InsecureSkipVerify + session cache (как в Go)
+// TLS config: проверка сертификатов по Mozilla CA (webpki-roots) + session cache
 // ---------------------------------------------------------------------------
-
-#[derive(Debug)]
-struct NoVerify;
-
-impl ServerCertVerifier for NoVerify {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::ECDSA_NISTP521_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ED25519,
-        ]
-    }
-}
 
 use once_cell::sync::Lazy;
 
-// Глобальный TLS-конфиг с session resumption cache (аналог tls.NewLRUClientSessionCache(100))
 static TLS_CONFIG: Lazy<Arc<ClientConfig>> = Lazy::new(|| {
-    let mut cfg = ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(NoVerify))
-        .with_no_client_auth();
+    let mut root_store = RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    let mut cfg = ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("valid default TLS protocol versions")
+    .with_root_certificates(root_store)
+    .with_no_client_auth();
     cfg.resumption = rustls::client::Resumption::in_memory_sessions(100);
     Arc::new(cfg)
 });
@@ -515,9 +470,13 @@ pub fn ws_handshake_timeout(total: Duration) -> Duration {
     }
 }
 
-fn server_name(domain: &str) -> ServerName<'static> {
-    ServerName::try_from(domain.to_string())
-        .unwrap_or_else(|_| ServerName::IpAddress("127.0.0.1".parse::<IpAddr>().unwrap().into()))
+fn server_name(domain: &str) -> Result<ServerName<'static>, WsError> {
+    let trimmed = domain.trim();
+    if trimmed.is_empty() {
+        return Err(WsError::Other("empty TLS server name".to_string()));
+    }
+    ServerName::try_from(trimmed.to_string())
+        .map_err(|_| WsError::Other(format!("invalid TLS server name: {}", trimmed)))
 }
 
 // wsConnectOnce — заголовки 1-в-1 как в Python raw_websocket.py (без User-Agent).
@@ -530,6 +489,7 @@ pub async fn ws_connect_once(
     if dial_addr.is_empty() {
         return Err(WsError::Other("empty dial address".to_string()));
     }
+    let sni = server_name(domain)?;
 
     let target_addr = format!("{}:443", dial_addr);
 
@@ -541,7 +501,6 @@ pub async fn ws_connect_once(
     set_sock_opts(&raw_conn);
 
     let connector = TlsConnector::from(TLS_CONFIG.clone());
-    let sni = server_name(domain);
 
     let handshake_timeout = ws_handshake_timeout(timeout);
     let tls_conn =
@@ -712,4 +671,26 @@ pub async fn connect_one_ws(ip: &str, domains: &[String]) -> Option<RawWebSocket
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tls_config_initializes_with_webpki_roots() {
+        let _cfg = TLS_CONFIG.clone();
+    }
+
+    #[test]
+    fn server_name_accepts_valid_domains_and_rejects_invalid() {
+        assert!(matches!(
+            server_name("kws2.web.telegram.org"),
+            Ok(ServerName::DnsName(_))
+        ));
+        assert!(matches!(server_name("yo1nk.app"), Ok(ServerName::DnsName(_))));
+        assert!(server_name("").is_err());
+        assert!(server_name("   ").is_err());
+        assert!(server_name("invalid host name").is_err());
+    }
 }

@@ -19,7 +19,7 @@
 | Статус | Задача | Описание |
 | :--- | :--- | :--- |
 | ✅ Выполнено | **Этап 3.2: Смена ключа подписи разработчика** | Сгенерирован новый приватный keystore (RSA 4096, вне Git в `keystore/`), секреты `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` загружены в GitHub Secrets и `local.properties`, старый `app/release.p12` удалён из репозитория, обновлён `.github/workflows/release.yml`, выпуск `v4.0.0` (`[NEW_SIGNATURE]`). |
-| ⏳ План | **Верификация TLS в `libtgwsproxy.so` (Rust)** | Замена `NoVerify` в `src-rust/ws.rs` на проверку цепочки сертификатов (`webpki-roots`) и настройка сборки `cargo-ndk` в CI (локально в текущей среде Rust-тулчейн не установлен). |
+| ✅ Выполнено | **Верификация TLS в `libtgwsproxy.so` (Rust)** | Удалён `NoVerify` в `src-rust/ws.rs`, включена проверка цепочки сертификатов и подписей по корневому хранилищу `webpki-roots` (`rustls::RootCertStore`) + добавлены юнит-тесты и автоматическая сборка `.so` через `cargo-ndk` (c флагом `-Wl,-z,max-page-size=16384`) в `.github/workflows/build.yml` и `.github/workflows/release.yml`. |
 
 ---
 

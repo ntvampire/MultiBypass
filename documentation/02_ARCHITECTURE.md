@@ -52,7 +52,7 @@
 
 ## 2.3. Нативные библиотеки и внешний контур
 - **C/C++ (`app/src/main/cpp/`)**: `ciadpi` (`libbyedpi.so`), `hev-socks5-tunnel` (`libhev-socks5-tunnel.so`), JNI-обвязка.
-- **Rust (`src-rust/`)**: `libtgwsproxy.so` — асинхронный MTProto-to-WebSocket прокси с балансировкой и пулом Cloudflare-узлов.
+- **Rust (`src-rust/`)**: `libtgwsproxy.so` — асинхронный MTProto-to-WebSocket прокси с балансировкой, пулом Cloudflare-узлов и проверкой TLS-сертификатов через `rustls` + `webpki-roots` (собирается в CI через `cargo-ndk` для `arm64-v8a` и `armeabi-v7a`).
 - **Автономный генератор списков (`scripts/update_domains.py` + `seeds/`)**:
   - Запускается ежедневно по расписанию в `.github/workflows/update_domains.yml`.
   - Собирает SmartHosts из первичных источников (`GeoHide EU`, `ImMALWARE`, `AstraCat`, резерв `Noktomezo`) + `seeds/seeds_geoblock.txt`.
