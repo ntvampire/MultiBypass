@@ -13,10 +13,12 @@ import hashlib
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -241,6 +243,34 @@ def is_smarthosts_excluded(domain: str) -> bool:
     return False
 
 
+def probe_sni_relay(ip: str, timeout: float = 2.5) -> tuple[str, float | None]:
+    """Measure TCP :443 connect latency for a candidate SNI relay IP."""
+    start = time.monotonic()
+    try:
+        with socket.create_connection((ip, 443), timeout=timeout):
+            latency_ms = (time.monotonic() - start) * 1000.0
+            return ip, latency_ms
+    except OSError:
+        return ip, None
+
+
+def check_sni_relays(
+    candidate_ips: list[str],
+    timeout: float = 2.5,
+    max_workers: int = 24,
+) -> dict[str, float]:
+    """Probe candidate SNI relay IPs concurrently and return {ip: latency_ms} for reachable relays."""
+    if not candidate_ips:
+        return {}
+    healthy: dict[str, float] = {}
+    workers = max(1, min(max_workers, len(candidate_ips)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for ip, latency_ms in pool.map(lambda addr: probe_sni_relay(addr, timeout=timeout), candidate_ips):
+            if latency_ms is not None:
+                healthy[ip] = latency_ms
+    return healthy
+
+
 def process_smarthosts() -> tuple[str, int]:
     """
     Fetch, aggregate, sanitize and format SmartHosts geoblock mapping
@@ -309,17 +339,60 @@ def process_smarthosts() -> tuple[str, int]:
         print("[ERROR] SmartHosts mapping is completely empty!", file=sys.stderr)
         return "", 0
 
-    # Group domains by proxy IP (keeping top 2 unique IPs per domain for redundancy without packet bloat)
+    all_candidate_ips = sorted({ip for ips in domain_to_ips.values() for ip in ips})
+    healthy_latencies: dict[str, float] = {}
+    if os.environ.get("SKIP_RELAY_HEALTHCHECK") == "1":
+        print(f"Skipping SNI relay health-check (SKIP_RELAY_HEALTHCHECK=1); keeping all {len(all_candidate_ips)} IPs.")
+    else:
+        print(f"Health-checking {len(all_candidate_ips)} unique SmartHosts SNI relay IPs (TCP :443)...")
+        healthy_latencies = check_sni_relays(all_candidate_ips)
+        print(f"  Healthy SNI relays: {len(healthy_latencies)}/{len(all_candidate_ips)}")
+
+    use_health_filter = len(healthy_latencies) >= 3
+    if not use_health_filter and all_candidate_ips and os.environ.get("SKIP_RELAY_HEALTHCHECK") != "1":
+        print(
+            "  [WARN] Too few healthy SNI relays detected; keeping unfiltered upstream IPs as fallback.",
+            file=sys.stderr,
+        )
+
+    # Group domains by proxy IP (keeping top 2 healthy IPs sorted by lowest latency)
     ip_to_domains: dict[str, list[str]] = defaultdict(list)
+    active_domains = 0
+    skipped_unhealthy_domains = 0
     for dom, ips in sorted(domain_to_ips.items()):
-        for ip in ips[:2]:
+        if use_health_filter:
+            live_ips = sorted(
+                (ip for ip in ips if ip in healthy_latencies),
+                key=lambda addr: healthy_latencies[addr],
+            )
+            if not live_ips:
+                skipped_unhealthy_domains += 1
+                continue
+            selected_ips = live_ips[:2]
+        else:
+            selected_ips = ips[:2]
+        active_domains += 1
+        for ip in selected_ips:
             ip_to_domains[ip].append(dom)
+
+    if skipped_unhealthy_domains > 0:
+        print(f"  Dropped {skipped_unhealthy_domains} domain(s) with no reachable SNI relay.")
+
+    if not ip_to_domains:
+        print("[ERROR] No live SmartHosts proxy endpoints remained!", file=sys.stderr)
+        return "", 0
+
+    health_note = (
+        f"live proxy endpoints: {len(ip_to_domains)}/{len(all_candidate_ips)}"
+        if use_health_filter
+        else f"proxy endpoints: {len(ip_to_domains)} (unfiltered)"
+    )
 
     cleaned_lines = [
         "# MultiBypass - SmartHosts Geoblock SNI-Relay Map",
         "# Autonomous multi-provider aggregation (GeoHide EU, ImMALWARE, AstraCat).",
         "# Processed and sanitized: 4PDA, Google Sign-In, suggestqueries, Anti-DPI and domestic RU/BY services excluded.",
-        f"# Total unique geoblock domains: {len(domain_to_ips)}, proxy endpoints: {len(ip_to_domains)}",
+        f"# Total unique geoblock domains: {active_domains}, {health_note}",
         ""
     ]
 
@@ -332,7 +405,7 @@ def process_smarthosts() -> tuple[str, int]:
             cleaned_lines.append(f"{ip} {' '.join(chunk)}")
 
     result_text = "\n".join(cleaned_lines) + "\n"
-    return result_text, len(domain_to_ips)
+    return result_text, active_domains
 
 
 def main():

@@ -1,7 +1,10 @@
 package com.multibypass.app.core.diagnostics
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
+import com.multibypass.app.BuildConfig
 import com.multibypass.app.core.byedpi.ByeDpiController
 import com.multibypass.app.core.smarthosts.SmartHostsDnsRelay
 import com.multibypass.app.core.smarthosts.SmartHostsManager
@@ -43,14 +46,26 @@ data class DiagnosticStepResult(
 data class DiagnosticsReport(
     val timestamp: Long = System.currentTimeMillis(),
     val steps: List<DiagnosticStepResult>,
-    val allOk: Boolean
+    val allOk: Boolean,
+    val appVersion: String = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+    val networkType: String = "Не определено",
+    val upstreamDns: String = "",
+    val antiDpiSummary: String = "",
+    val smartHostsSummary: String = "",
+    val tgProxySummary: String = ""
 ) {
-    fun toPlainText(context: Context): String {
+    fun toPlainText(context: Context? = null): String {
         val sb = StringBuilder()
         sb.appendLine("=== MultiBypass Сетевой Доктор Отчет ===")
+        sb.appendLine("Версия: MultiBypass v$appVersion")
         sb.appendLine("Дата: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(timestamp))}")
         sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
         sb.appendLine("Устройство: ${Build.MANUFACTURER} ${Build.MODEL}")
+        sb.appendLine("Сеть: $networkType")
+        if (upstreamDns.isNotBlank()) sb.appendLine("DNS сети: $upstreamDns")
+        if (antiDpiSummary.isNotBlank()) sb.appendLine("Anti-DPI: $antiDpiSummary")
+        if (smartHostsSummary.isNotBlank()) sb.appendLine("SmartHosts: $smartHostsSummary")
+        if (tgProxySummary.isNotBlank()) sb.appendLine("Telegram Proxy: $tgProxySummary")
         sb.appendLine("----------------------------------------")
         for (s in steps) {
             val icon = when (s.status) {
@@ -272,8 +287,63 @@ object NetworkDiagnostics {
 
 
 
+        val antiDpiConfig = repository.antiDpiConfig.value
+        val antiDpiSummary = if (antiDpiConfig.separateProfiles) {
+            "YT='${antiDpiConfig.strategy}', Meta='${antiDpiConfig.instagramStrategy}' (раздельные профили)"
+        } else {
+            "'${antiDpiConfig.strategy}' (единый профиль)"
+        }
+        val smartHostsSummary = if (smartHostsConfig.enabled) {
+            "вкл (доменов в базе: ${SmartHostsManager.domainCount.value})"
+        } else {
+            "выкл"
+        }
+        val tgProxySummary = if (tgConfig.enabled) {
+            "вкл (127.0.0.1:${tgConfig.port})"
+        } else {
+            "выкл"
+        }
+
         val allOk = steps.none { it.status == DiagnosticStatus.ERROR }
-        DiagnosticsReport(steps = steps, allOk = allOk)
+        DiagnosticsReport(
+            steps = steps,
+            allOk = allOk,
+            networkType = detectActiveNetworkLabel(context),
+            upstreamDns = upstreamDns,
+            antiDpiSummary = antiDpiSummary,
+            smartHostsSummary = smartHostsSummary,
+            tgProxySummary = tgProxySummary
+        )
+    }
+
+    private fun detectActiveNetworkLabel(context: Context): String {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return "Не определено"
+            val underlyingCaps = cm.allNetworks
+                .asSequence()
+                .mapNotNull { cm.getNetworkCapabilities(it) }
+                .filter {
+                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                        !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                }
+                .toList()
+            val caps = underlyingCaps.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) }
+                ?: underlyingCaps.firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) }
+                ?: underlyingCaps.firstOrNull()
+                ?: cm.getNetworkCapabilities(cm.activeNetwork)
+
+            when {
+                caps == null -> "Нет активной сети"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Мобильная сеть (LTE/5G)"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+                else -> "Другая сеть"
+            }
+        } catch (_: Exception) {
+            "Не определено"
+        }
     }
 
     private fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean {

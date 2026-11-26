@@ -1,6 +1,9 @@
 package com.multibypass.app
 
 import com.multibypass.app.core.byedpi.ByeDpiController
+import com.multibypass.app.core.diagnostics.DiagnosticStatus
+import com.multibypass.app.core.diagnostics.DiagnosticStepResult
+import com.multibypass.app.core.diagnostics.DiagnosticsReport
 import com.multibypass.app.core.lists.ListUpdateManager
 import com.multibypass.app.core.updater.AppUpdateManager
 import com.multibypass.app.data.model.CORE_ANTIDPI_ROOT_DOMAINS
@@ -85,5 +88,35 @@ class CoreLogicTest {
         assertTrue(CORE_ANTIDPI_ROOT_DOMAINS.containsAll(META_ANTIDPI_ROOT_DOMAINS))
         assertTrue(CORE_ANTIDPI_ROOT_DOMAINS.contains("googlevideo.com"))
         assertTrue(CORE_ANTIDPI_ROOT_DOMAINS.contains("i.instagram.com"))
+    }
+
+    @Test
+    fun testDiagnosticsReportPlainTextIncludesNetworkContext() {
+        val report = DiagnosticsReport(
+            steps = listOf(
+                DiagnosticStepResult(
+                    title = "YouTube (Анти-DPI)",
+                    description = "Серверы отвечают",
+                    status = DiagnosticStatus.SUCCESS,
+                    latencyMs = 42L
+                )
+            ),
+            allOk = true,
+            appVersion = "4.1.0 (52)",
+            networkType = "Мобильная сеть (LTE/5G)",
+            upstreamDns = "8.8.8.8",
+            antiDpiSummary = "YT='-s1 -f-1 -t5 -a1', Meta='-s2 -a1' (раздельные профили)",
+            smartHostsSummary = "вкл (доменов в базе: 1180)",
+            tgProxySummary = "вкл (127.0.0.1:1443)"
+        )
+
+        val text = report.toPlainText()
+        assertTrue(text.contains("MultiBypass v4.1.0 (52)"))
+        assertTrue(text.contains("Мобильная сеть (LTE/5G)"))
+        assertTrue(text.contains("DNS сети: 8.8.8.8"))
+        assertTrue(text.contains("Anti-DPI: YT='-s1 -f-1 -t5 -a1'"))
+        assertTrue(text.contains("SmartHosts: вкл (доменов в базе: 1180)"))
+        assertTrue(text.contains("Telegram Proxy: вкл (127.0.0.1:1443)"))
+        assertTrue(text.contains("Задержка: 42 мс"))
     }
 }

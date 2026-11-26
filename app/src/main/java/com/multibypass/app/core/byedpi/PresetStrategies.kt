@@ -138,6 +138,7 @@ class StrategyTester private constructor(private val context: Context) {
         private const val TAG = "StrategyTester"
         private const val TEST_PORT = 1080
         private const val NOTIF_ID_TESTING = 3001
+        const val ACTION_STOP_STRATEGY_TEST = "com.multibypass.app.ACTION_STOP_STRATEGY_TEST"
 
         @Volatile
         private var INSTANCE: StrategyTester? = null
@@ -228,6 +229,14 @@ class StrategyTester private constructor(private val context: Context) {
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            val stopTestIntent = PendingIntent.getBroadcast(
+                context,
+                NOTIF_ID_TESTING + 1,
+                Intent(context, StrategyStopReceiver::class.java).apply {
+                    action = ACTION_STOP_STRATEGY_TEST
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
             fun updateProgressNotification(current: Int, total: Int, bestLatency: Long?) {
                 if (!hasNotifPermission) return
@@ -238,6 +247,11 @@ class StrategyTester private constructor(private val context: Context) {
                     .setContentTitle(title)
                     .setContentText(text)
                     .setContentIntent(openAutoStrategyIntent)
+                    .addAction(
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Остановить",
+                        stopTestIntent
+                    )
                     .setProgress(total, current, false)
                     .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setOngoing(true)
@@ -287,79 +301,68 @@ class StrategyTester private constructor(private val context: Context) {
                 if (_testResults.value.isNotEmpty()) {
                     repository.saveStrategyTestResults(_testResults.value)
                 }
+            } catch (_: CancellationException) {
+                Log.i(TAG, "Strategy testing cancelled")
             } catch (e: Exception) {
                 Log.e(TAG, "Testing error: ${e.message}", e)
             } finally {
-                try {
-                    httpClient.dispatcher.cancelAll()
-                    httpClient.connectionPool.evictAll()
-                } catch (_: Throwable) {}
-
-                if (wasVpnConnected) {
-                    val cfg = repository.antiDpiConfig.value
-                    ByeDpiController.start(
-                        strategy = cfg.strategy,
-                        instagramStrategy = cfg.instagramStrategy,
-                        separateProfiles = cfg.separateProfiles,
-                        port = TEST_PORT
-                    )
-                } else {
-                    ByeDpiController.stop()
+                withContext(NonCancellable) {
+                    testJob = null
+                    cleanupAfterTest(wasVpnConnected)
+                    onComplete(bestResult)
                 }
-
-                if (wakeLock?.isHeld == true) {
-                    try {
-                        wakeLock?.release()
-                    } catch (_: Exception) {}
-                }
-                wakeLock = null
-
-                notificationManager.cancel(NOTIF_ID_TESTING)
-                ServiceWatchdog.setTesting(false)
-                _isTesting.value = false
-                onComplete(bestResult)
             }
         }
     }
 
+    private suspend fun cleanupAfterTest(wasVpnConnected: Boolean) {
+        try {
+            httpClient.dispatcher.cancelAll()
+            httpClient.connectionPool.evictAll()
+        } catch (_: Throwable) {}
+
+        if (wasVpnConnected) {
+            val cfg = repository.antiDpiConfig.value
+            ByeDpiController.start(
+                strategy = cfg.strategy,
+                instagramStrategy = cfg.instagramStrategy,
+                separateProfiles = cfg.separateProfiles,
+                port = TEST_PORT
+            )
+        } else {
+            ByeDpiController.stop()
+        }
+
+        if (wakeLock?.isHeld == true) {
+            try {
+                wakeLock?.release()
+            } catch (_: Exception) {}
+        }
+        wakeLock = null
+
+        NotificationManagerCompat.from(context).cancel(NOTIF_ID_TESTING)
+        ServiceWatchdog.setTesting(false)
+        _isTesting.value = false
+    }
+
     fun stopTest() {
-        testJob?.cancel()
+        val activeJob = testJob
         testJob = null
+        activeJob?.cancel()
+        try {
+            httpClient.dispatcher.cancelAll()
+        } catch (_: Throwable) {}
         if (_testResults.value.isNotEmpty()) {
             repository.saveStrategyTestResults(_testResults.value)
         }
-        val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
-        val originalStrategy = repository.antiDpiConfig.value.strategy
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                httpClient.dispatcher.cancelAll()
-                httpClient.connectionPool.evictAll()
-            } catch (_: Throwable) {}
+        NotificationManagerCompat.from(context).cancel(NOTIF_ID_TESTING)
+        _isTesting.value = false
 
-            if (wasVpnConnected) {
-                val cfg = repository.antiDpiConfig.value
-                ByeDpiController.start(
-                    strategy = cfg.strategy,
-                    instagramStrategy = cfg.instagramStrategy,
-                    separateProfiles = cfg.separateProfiles,
-                    port = TEST_PORT
-                )
-            } else {
-                ByeDpiController.stop()
+        if (activeJob == null) {
+            val wasVpnConnected = MultiBypassVpnService.vpnStatus.value == VpnStatus.CONNECTED
+            CoroutineScope(Dispatchers.IO).launch {
+                cleanupAfterTest(wasVpnConnected)
             }
-
-            if (wakeLock?.isHeld == true) {
-                try {
-                    wakeLock?.release()
-                } catch (_: Exception) {}
-            }
-            wakeLock = null
-
-            val notificationManager = NotificationManagerCompat.from(context)
-            notificationManager.cancel(NOTIF_ID_TESTING)
-
-            ServiceWatchdog.setTesting(false)
-            _isTesting.value = false
         }
     }
 

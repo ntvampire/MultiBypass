@@ -3,6 +3,7 @@ package com.multibypass.app.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -159,38 +160,63 @@ fun DiagnosticsDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            report?.let { r ->
-                                val text = r.toPlainText(context)
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(ClipData.newPlainText("MultiBypass Doctor", text))
-                                Toast.makeText(context, "Отчет скопирован в буфер", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        enabled = !isRunning && report != null,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp)
+                if (!isRunning && report != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Отчет", fontSize = 12.sp)
+                        OutlinedButton(
+                            onClick = {
+                                report?.let { r ->
+                                    val text = r.toPlainText(context)
+                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    cm.setPrimaryClip(ClipData.newPlainText("MultiBypass Doctor", text))
+                                    Toast.makeText(context, "Отчет скопирован в буфер", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Копия", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                report?.let { r ->
+                                    val text = r.toPlainText(context)
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, "MultiBypass: отчет диагностики")
+                                        putExtra(Intent.EXTRA_TEXT, text)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(sendIntent, "Отправить отчет диагностики")
+                                    )
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Отправить", fontSize = 12.sp)
+                        }
                     }
 
-                    Button(
-                        onClick = {
-                            if (isRunning) onDismissRequest() else startDiagnostics()
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (isRunning) CardBorder else GreenPrimary)
-                    ) {
-                        Text(if (isRunning) "Отмена" else "Повторить", fontSize = 12.sp)
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                Button(
+                    onClick = {
+                        if (isRunning) onDismissRequest() else startDiagnostics()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isRunning) CardBorder else GreenPrimary)
+                ) {
+                    Text(if (isRunning) "Отмена" else "Повторить", fontSize = 13.sp)
                 }
             }
         }
